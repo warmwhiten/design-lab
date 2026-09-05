@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LabShell, { readURL, type Ctx, type Group } from "@/components/LabShell";
 import { loadFont, registerUserFont, type FontDef } from "@/lib/font";
-import { compose, FONTS as BASE_FONTS, makeCanvas, TOOLS, type WoodcutState } from "./engine";
+import {
+  compose, FONTS as BASE_FONTS, layoutGlyphs, makeCanvas, parseNudges, pickGlyph,
+  serializeNudges, TOOLS, type WoodcutState
+} from "./engine";
 import { toSVG } from "./svg";
 import { DEFAULTS, DRAFT, PRESETS, PREVIEW } from "./config";
 
@@ -24,6 +27,10 @@ export default function Woodcut() {
   const draftRef = useRef(false);
   const rafRef = useRef<number | null>(null);
   const userFontCount = useRef(0);
+  const [active, setActive] = useState<number | null>(null);
+  const dragRef = useRef<{ idx: number; x: number; y: number; dx: number; dy: number; rot: number; alt: boolean } | null>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   useEffect(() => { setState((s) => ({ ...s, ...readURL(DEFAULTS) })); }, []);
 
@@ -41,10 +48,86 @@ export default function Woodcut() {
       const S = draftRef.current ? DRAFT : PREVIEW;
       const t0 = performance.now();
       if (cv.width !== S) { cv.width = S; cv.height = S; }
-      compose(cv, S, state, fonts);
+      compose(cv, S, state, fonts, active);
       setMeta(`${S}px · 시드 ${state.seed} · ${(performance.now() - t0).toFixed(0)}ms`);
     });
-  }, [state, fonts]);
+  }, [state, fonts, active]);
+
+  /* ---------- 활자 옮기기 ----------
+     캔버스 위에서 글자를 집어 끈다. Alt 를 누른 채 좌우로 끌면 회전.
+     보정값은 상태에 문자열로 들어가므로 링크 공유에도 그대로 실린다. */
+  useEffect(() => {
+    const cv = canvasRef.current;
+    if (!cv) return;
+
+    /* 화면 좌표 → 캔버스 크기와 무관한 천분율.
+       드래그 중에는 초안 해상도로 캔버스가 줄어들기 때문에(1100 → 620)
+       픽셀로 계산하면 도중에 좌표계가 바뀌어 이동량이 어긋난다. */
+    const toNorm = (e: PointerEvent) => {
+      const r = cv.getBoundingClientRect();
+      return { x: ((e.clientX - r.left) / r.width) * 1000, y: ((e.clientY - r.top) / r.height) * 1000 };
+    };
+    /** 천분율 좌표로 글자를 집는다 */
+    const pickAt = (p: { x: number; y: number }) => {
+      const probe = document.createElement("canvas");
+      probe.width = probe.height = 8;
+      const pg = probe.getContext("2d") as CanvasRenderingContext2D;
+      const S = 1000;
+      const boxes = layoutGlyphs(pg, S, stateRef.current, fonts).boxes;
+      return pickGlyph(boxes, p.x, p.y);
+    };
+
+    const down = (e: PointerEvent) => {
+      const p = toNorm(e);
+      const hit = pickAt(p);
+      if (!hit) { setActive(null); return; }
+      const cur = parseNudges(stateRef.current.nudge).get(hit.idx) ?? { dx: 0, dy: 0, rot: 0 };
+      dragRef.current = { idx: hit.idx, x: p.x, y: p.y, dx: cur.dx, dy: cur.dy, rot: cur.rot, alt: e.altKey || e.shiftKey };
+      setActive(hit.idx);
+      cv.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    };
+
+    const move = (e: PointerEvent) => {
+      const p = toNorm(e);
+      const d = dragRef.current;
+      if (!d) {
+        cv.style.cursor = pickAt(p) ? "grab" : "default";
+        return;
+      }
+      const next = new Map(parseNudges(stateRef.current.nudge));
+      /* 보조키는 누른 순간이 아니라 끄는 동안 매번 본다.
+         끌다가 중간에 눌러도 회전으로 넘어가고, 떼면 다시 이동이다.
+         둘 다 드래그 시작점에서 계산하므로 오가도 값이 튀지 않는다. */
+      if (e.altKey || e.shiftKey || d.alt) {
+        next.set(d.idx, { dx: d.dx, dy: d.dy, rot: d.rot + (p.x - d.x) * 0.24 });
+      } else {
+        next.set(d.idx, { dx: d.dx + (p.x - d.x), dy: d.dy + (p.y - d.y), rot: d.rot });
+      }
+      onChange({ nudge: serializeNudges(next) }, true);
+      cv.style.cursor = "grabbing";
+    };
+
+    const up = (e: PointerEvent) => {
+      if (!dragRef.current) return;
+      dragRef.current = null;
+      cv.style.cursor = "grab";
+      try { cv.releasePointerCapture(e.pointerId); } catch { /* noop */ }
+      onChange({}, false); // 고해상도로 다시 그린다
+    };
+
+    cv.addEventListener("pointerdown", down);
+    cv.addEventListener("pointermove", move);
+    cv.addEventListener("pointerup", up);
+    cv.addEventListener("pointercancel", up);
+    cv.style.touchAction = "none";
+    return () => {
+      cv.removeEventListener("pointerdown", down);
+      cv.removeEventListener("pointermove", move);
+      cv.removeEventListener("pointerup", up);
+      cv.removeEventListener("pointercancel", up);
+    };
+  }, [fonts, onChange]);
 
   /* 웹폰트가 실제로 준비된 뒤 한 번 더 */
   useEffect(() => {
@@ -67,7 +150,7 @@ export default function Woodcut() {
     {
       label: "글자",
       controls: [
-        { t: "textarea", k: "text", rows: 2, hint: "줄바꿈으로 여러 줄. 글자마다 따로 새겨져 조금씩 어긋납니다." },
+        { t: "textarea", k: "text", rows: 2, hint: "줄바꿈으로 여러 줄. 캔버스에서 글자를 끌어 옮기고, Alt(또는 Shift) 를 누른 채 끌면 돌아갑니다." },
         { t: "select", k: "font", options: fonts.map((f) => ({ value: f.id, label: f.label })) },
         {
           t: "file", label: "내 폰트 쓰기 (.ttf / .otf / .woff2)", accept: ".ttf,.otf,.woff,.woff2,font/*",
@@ -118,6 +201,15 @@ export default function Woodcut() {
               label: "다시 새기기",
               primary: true,
               run: (ctx) => ctx.set({ seed: Math.floor(Math.random() * 99999) })
+            },
+            {
+              label: "배치 되돌리기",
+              run: (ctx) => {
+                if (!ctx.state.nudge) { ctx.toast("옮긴 글자가 없어요"); return; }
+                setActive(null);
+                ctx.set({ nudge: "" });
+                ctx.toast("글자 배치를 초기 상태로");
+              }
             },
             {
               label: "랜덤 조합",

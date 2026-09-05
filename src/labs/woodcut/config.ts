@@ -15,6 +15,7 @@ export const DEFAULTS: WoodcutState = {
   starve: 0.3,
   fibre: 0.05,
   seed: 7,
+  nudge: "",
   cInk: "#26231f",
   cPaper: "#f1eee4",
   transparent: false
