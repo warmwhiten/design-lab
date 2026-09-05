@@ -31,6 +31,21 @@ export const LABS: Lab[] = [
     mark: '<circle cx="32" cy="32" r="26" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4"/><path d="M14 32c0-11 8-17 18-17s18 6 18 17-8 17-18 17-18-6-18-17z" fill="currentColor"/><path d="M26 24h12v5h-7v3h6v5h-6v7h-5z" fill="var(--panel)"/>'
   },
   {
+    slug: "woodcut",
+    title: "Woodcut Type Lab",
+    tagline: "글자를 파고 잉크를 올려 찍는다. 조각도·잉크량·손떨림을 슬라이더로.",
+    description:
+      "평범한 폰트를 판화처럼 바꾸는 무료 레터링 도구. 조각도 종류와 크기, 잉크 번짐과 결손, 손떨림과 칼자국을 슬라이더로 만지면 리노컷·목판·고무 스탬프·레터프레스 질감의 글자가 실시간으로 나오고 SVG와 PNG로 저장됩니다. 한글과 직접 올린 폰트도 지원합니다.",
+    keywords: [
+      "판화 느낌 폰트", "리노컷 타이포그래피", "목판화 글씨", "스탬프 폰트 만들기",
+      "빈티지 인쇄 질감", "레터프레스 효과", "거친 질감 로고", "woodcut type generator",
+      "linocut lettering", "block print type"
+    ],
+    tags: ["타이포그래피", "질감", "인쇄"],
+    status: "live",
+    mark: '<path d="M11 15c-2 10-1 24 2 32 7 5 30 6 38 1 4-9 4-26 0-34-8-5-34-4-40 1z" fill="currentColor"/><ellipse cx="31" cy="31" rx="9" ry="6.5" fill="var(--panel)"/><path d="M46 12l4 3-3 4z" fill="currentColor"/><path d="M14 49l5 2-4 3z" fill="currentColor"/>'
+  },
+  {
     slug: "halftone",
     title: "Halftone Lab",
     tagline: "사진을 인쇄용 하프톤으로. 점 모양·각도·밀도·CMYK 분리를 슬라이더로.",

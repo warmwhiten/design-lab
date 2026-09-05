@@ -6,6 +6,11 @@
    새 프레임은 rawSpan() 에 case 하나만 추가하면 된다.
    ============================================================= */
 
+/* 폰트 정의·로딩은 실험실 공통 유틸로 옮겼다. 기존 import 경로를 지키려고 여기서 다시 내보낸다. */
+import { findFont, loadFont, type FontDef } from "@/lib/font";
+export { findFont, loadFont };
+export type { FontDef };
+
 export type FrameId = "circle" | "wave" | "blob" | "arch" | "tri" | "square";
 
 export type FramefitState = {
@@ -30,8 +35,6 @@ export type FramefitState = {
   transparent: boolean;
   guides: boolean;
 };
-
-export type FontDef = { id: string; label: string; css: string; weight: number };
 
 export const FRAME_OPTS: { value: FrameId; label: string; icon: string }[] = [
   { value: "circle", label: "원형", icon: '<circle cx="24" cy="24" r="20"/>' },
@@ -157,10 +160,6 @@ function dilate(src: HTMLCanvasElement, r: number, name: string) {
 const SW = 2048, SH = 620;
 let srcA: HTMLCanvasElement | null = null;
 let tmpA: HTMLCanvasElement | null = null;
-
-export function findFont(id: string, fonts: FontDef[]) {
-  return fonts.find((f) => f.id === id) ?? fonts[0];
-}
 
 function buildSource(line: string, C: FramefitState, fonts: FontDef[]) {
   if (!srcA) srcA = mk(SW, SH);
@@ -331,10 +330,3 @@ export function compose(
 }
 
 export function makeCanvas(S: number) { return mk(S, S); }
-
-export function loadFont(F: FontDef, text = "") {
-  const fam = F.css.replace(/"/g, "");
-  return document.fonts
-    .load(`${F.weight} 200px "${fam}"`, text + "ABC가나다")
-    .catch(() => []);
-}

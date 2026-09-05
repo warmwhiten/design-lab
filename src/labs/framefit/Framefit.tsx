@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LabShell, { readURL, type Ctx, type Group } from "@/components/LabShell";
+import { registerUserFont, type FontDef } from "@/lib/font";
 import {
   compose, FONTS as BASE_FONTS, FRAME_OPTS, loadFont, makeCanvas,
-  type FontDef, type FramefitState
+  type FramefitState
 } from "./engine";
 import { toSVG } from "./svg";
 import { DEFAULTS, DRAFT, PRESETS, PREVIEW } from "./config";
@@ -86,18 +87,7 @@ export default function Framefit() {
           t: "file", label: "내 폰트 쓰기 (.ttf / .otf / .woff2)", accept: ".ttf,.otf,.woff,.woff2,font/*",
           onFile: async (file, ctx) => {
             try {
-              const buf = await file.arrayBuffer();
-              const n = ++userFontCount.current;
-              const family = `FramefitUser${n}`;
-              const ff = new FontFace(family, buf);
-              await ff.load();
-              document.fonts.add(ff);
-              const def: FontDef = {
-                id: `user${n}`,
-                label: "내 폰트 · " + file.name.replace(/\.[^.]+$/, ""),
-                css: `"${family}"`,
-                weight: 400
-              };
+              const def = await registerUserFont(file, "Framefit", ++userFontCount.current);
               setFonts((prev) => [...prev, def]);
               ctx.set({ font: def.id });
             } catch {
