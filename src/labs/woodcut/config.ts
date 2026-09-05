@@ -16,6 +16,7 @@ export const DEFAULTS: WoodcutState = {
   fibre: 0.05,
   seed: 7,
   nudge: "",
+  shapes: "",
   cInk: "#26231f",
   cPaper: "#f1eee4",
   transparent: false

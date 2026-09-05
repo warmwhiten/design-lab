@@ -20,6 +20,16 @@ export type Ctx<S> = {
 export type Ctl<S> =
   | { t: "textarea"; k: keyof S & string; rows?: number; hint?: string }
   | { t: "range"; k: keyof S & string; label: string; min: number; max: number; step: number; fmt?: (v: number) => string }
+  /* 상태 키 하나에 바로 묶이지 않는 값을 위한 슬라이더.
+     (예: 선택된 글자·도형의 크기처럼 문자열 안에 들어있는 값) */
+  | {
+      t: "vrange"; label: string; min: number; max: number; step: number;
+      get: (s: S) => number; set: (v: number, ctx: Ctx<S>) => void; fmt?: (v: number) => string;
+    }
+  /* 고르는 게 아니라 누를 때마다 실행되는 아이콘 버튼들 (예: 도형 넣기) */
+  | { t: "iconbuttons"; options: { label: string; icon: string; run: (ctx: Ctx<S>) => void }[] }
+  | { t: "vcolors"; items: { label: string; get: (s: S) => string; set: (v: string, ctx: Ctx<S>) => void }[] }
+  | { t: "vtoggle"; label: string; get: (s: S) => boolean; set: (v: boolean, ctx: Ctx<S>) => void }
   | { t: "select"; k: keyof S & string; label?: string; options: { value: string; label: string }[] }
   | { t: "file"; label: string; accept: string; onFile: (f: File, ctx: Ctx<S>) => void }
   | { t: "icons"; k: keyof S & string; options: { value: string; label: string; icon: string }[] }
@@ -206,6 +216,58 @@ function Control<S extends Record<string, any>>({ c, ctx }: { c: Ctl<S>; ctx: Ct
         </div>
       );
     }
+
+    case "vrange": {
+      const fmt = c.fmt ?? ((v: number) => v.toFixed(2));
+      const v = c.get(state);
+      return (
+        <div className="ctl">
+          <span className="ctl-l">{c.label}</span>
+          <span className="ctl-v">{fmt(v)}</span>
+          <input type="range" min={c.min} max={c.max} step={c.step} value={v} aria-label={c.label}
+            onChange={(e) => c.set(parseFloat(e.target.value), ctx)}
+            onPointerUp={() => set({} as Partial<S>, false)}
+            onKeyUp={() => set({} as Partial<S>, false)} />
+        </div>
+      );
+    }
+
+    case "vcolors":
+      return (
+        <div className="swatches">
+          {c.items.map((it) => (
+            <label className="sw" key={it.label}>
+              <span>{it.label}</span>
+              <input type="color" value={it.get(state)} aria-label={it.label}
+                onChange={(e) => it.set(e.target.value, ctx)}
+                onBlur={() => set({} as Partial<S>, false)} />
+            </label>
+          ))}
+        </div>
+      );
+
+    case "vtoggle":
+      return (
+        <label className="tog">
+          <input type="checkbox" checked={c.get(state)}
+            onChange={(e) => c.set(e.target.checked, ctx)} />
+          {" " + c.label}
+        </label>
+      );
+
+    case "iconbuttons":
+      return (
+        <div className="icons">
+          {c.options.map((o) => (
+            <button key={o.label} type="button" className="icon-b" title={o.label} aria-label={o.label}
+              onClick={() => o.run(ctx)}>
+              <svg viewBox="0 0 48 48" aria-hidden="true">
+                <g className="sh" dangerouslySetInnerHTML={{ __html: o.icon }} />
+              </svg>
+            </button>
+          ))}
+        </div>
+      );
 
     case "select":
       return (

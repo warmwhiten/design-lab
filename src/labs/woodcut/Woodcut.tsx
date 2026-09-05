@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LabShell, { readURL, type Ctx, type Group } from "@/components/LabShell";
 import { loadFont, registerUserFont, type FontDef } from "@/lib/font";
 import {
-  compose, FONTS as BASE_FONTS, layoutGlyphs, makeCanvas, parseNudges, pickGlyph,
-  serializeNudges, TOOLS, type WoodcutState
+  compose, FONTS as BASE_FONTS, layoutGlyphs, makeCanvas, NO_NUDGE, parseNudges, parseShapes,
+  pickItem, serializeNudges, serializeShapes, SHAPES, TOOLS,
+  type Nudge, type Shape, type WoodcutState
 } from "./engine";
 import { toSVG } from "./svg";
 import { DEFAULTS, DRAFT, PRESETS, PREVIEW } from "./config";
@@ -27,8 +28,10 @@ export default function Woodcut() {
   const draftRef = useRef(false);
   const rafRef = useRef<number | null>(null);
   const userFontCount = useRef(0);
-  const [active, setActive] = useState<number | null>(null);
-  const dragRef = useRef<{ idx: number; x: number; y: number; dx: number; dy: number; rot: number; alt: boolean } | null>(null);
+  const [active, setActive] = useState<string | null>(null);
+  const dragRef = useRef<
+    { id: string; x: number; y: number; dx: number; dy: number; rot: number; alt: boolean } | null
+  >(null);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -53,8 +56,54 @@ export default function Woodcut() {
     });
   }, [state, fonts, active]);
 
+  /* ---------- 선택된 항목 읽기 · 쓰기 ----------
+     글자의 보정값은 nudge 문자열에, 도형은 shapes 문자열에 들어있다.
+     둘 다 "위치(천분율) · 회전(°) · 크기 · 기울기(°)" 라는 같은 네 가지를 갖도록
+     맞춰 두어서, 슬라이더와 드래그가 종류를 가리지 않고 같은 코드로 돌아간다. */
+  const selKind = active ? (active[0] === "g" ? "glyph" : "shape") : null;
+
+  const readSel = useCallback((s: WoodcutState, id: string | null) => {
+    if (!id) return null;
+    if (id[0] === "g") {
+      const n = parseNudges(s.nudge).get(Number(id.slice(1))) ?? NO_NUDGE;
+      return { x: n.dx, y: n.dy, rot: n.rot, size: n.sc, skew: n.sk };
+    }
+    const h = parseShapes(s.shapes)[Number(id.slice(1))];
+    return h ? { x: h.x, y: h.y, rot: h.rot, size: h.s, skew: h.skew } : null;
+  }, []);
+
+  const writeSel = useCallback((
+    id: string | null,
+    patch: Partial<{ x: number; y: number; rot: number; size: number; skew: number }>,
+    draft: boolean
+  ) => {
+    if (!id) return;
+    const s = stateRef.current;
+    if (id[0] === "g") {
+      const i = Number(id.slice(1));
+      const map = new Map(parseNudges(s.nudge));
+      const cur: Nudge = map.get(i) ?? { ...NO_NUDGE };
+      map.set(i, {
+        dx: patch.x ?? cur.dx, dy: patch.y ?? cur.dy, rot: patch.rot ?? cur.rot,
+        sc: patch.size ?? cur.sc, sk: patch.skew ?? cur.sk
+      });
+      onChange({ nudge: serializeNudges(map) }, draft);
+    } else {
+      const i = Number(id.slice(1));
+      const list = parseShapes(s.shapes);
+      const cur = list[i];
+      if (!cur) return;
+      list[i] = {
+        ...cur,
+        x: patch.x ?? cur.x, y: patch.y ?? cur.y, rot: patch.rot ?? cur.rot,
+        s: patch.size ?? cur.s, skew: patch.skew ?? cur.skew
+      };
+      onChange({ shapes: serializeShapes(list) }, draft);
+    }
+  }, [onChange]);
+
   /* ---------- 활자 옮기기 ----------
-     캔버스 위에서 글자를 집어 끈다. Alt 를 누른 채 좌우로 끌면 회전.
+     캔버스 위에서 글자·도형을 집어 끈다. Alt 를 누른 채 좌우로 끌면 회전.
      보정값은 상태에 문자열로 들어가므로 링크 공유에도 그대로 실린다. */
   useEffect(() => {
     const cv = canvasRef.current;
@@ -67,23 +116,26 @@ export default function Woodcut() {
       const r = cv.getBoundingClientRect();
       return { x: ((e.clientX - r.left) / r.width) * 1000, y: ((e.clientY - r.top) / r.height) * 1000 };
     };
-    /** 천분율 좌표로 글자를 집는다 */
+    /** 천분율 좌표로 항목을 집는다 */
     const pickAt = (p: { x: number; y: number }) => {
       const probe = document.createElement("canvas");
       probe.width = probe.height = 8;
       const pg = probe.getContext("2d") as CanvasRenderingContext2D;
-      const S = 1000;
-      const boxes = layoutGlyphs(pg, S, stateRef.current, fonts).boxes;
-      return pickGlyph(boxes, p.x, p.y);
+      const items = layoutGlyphs(pg, 1000, stateRef.current, fonts).items;
+      return pickItem(items, p.x, p.y);
     };
 
     const down = (e: PointerEvent) => {
       const p = toNorm(e);
       const hit = pickAt(p);
       if (!hit) { setActive(null); return; }
-      const cur = parseNudges(stateRef.current.nudge).get(hit.idx) ?? { dx: 0, dy: 0, rot: 0 };
-      dragRef.current = { idx: hit.idx, x: p.x, y: p.y, dx: cur.dx, dy: cur.dy, rot: cur.rot, alt: e.altKey || e.shiftKey };
-      setActive(hit.idx);
+      const cur = readSel(stateRef.current, hit.id);
+      if (!cur) return;
+      dragRef.current = {
+        id: hit.id, x: p.x, y: p.y,
+        dx: cur.x, dy: cur.y, rot: cur.rot, alt: e.altKey || e.shiftKey
+      };
+      setActive(hit.id);
       cv.setPointerCapture(e.pointerId);
       e.preventDefault();
     };
@@ -95,16 +147,14 @@ export default function Woodcut() {
         cv.style.cursor = pickAt(p) ? "grab" : "default";
         return;
       }
-      const next = new Map(parseNudges(stateRef.current.nudge));
       /* 보조키는 누른 순간이 아니라 끄는 동안 매번 본다.
          끌다가 중간에 눌러도 회전으로 넘어가고, 떼면 다시 이동이다.
          둘 다 드래그 시작점에서 계산하므로 오가도 값이 튀지 않는다. */
       if (e.altKey || e.shiftKey || d.alt) {
-        next.set(d.idx, { dx: d.dx, dy: d.dy, rot: d.rot + (p.x - d.x) * 0.24 });
+        writeSel(d.id, { x: d.dx, y: d.dy, rot: d.rot + (p.x - d.x) * 0.24 }, true);
       } else {
-        next.set(d.idx, { dx: d.dx + (p.x - d.x), dy: d.dy + (p.y - d.y), rot: d.rot });
+        writeSel(d.id, { x: d.dx + (p.x - d.x), y: d.dy + (p.y - d.y), rot: d.rot }, true);
       }
-      onChange({ nudge: serializeNudges(next) }, true);
       cv.style.cursor = "grabbing";
     };
 
@@ -127,7 +177,7 @@ export default function Woodcut() {
       cv.removeEventListener("pointerup", up);
       cv.removeEventListener("pointercancel", up);
     };
-  }, [fonts, onChange]);
+  }, [fonts, onChange, readSel, writeSel]);
 
   /* 웹폰트가 실제로 준비된 뒤 한 번 더 */
   useEffect(() => {
@@ -145,6 +195,31 @@ export default function Woodcut() {
     compose(cv, S, ctx.state, fonts);
     cv.toBlob((blob) => { if (blob) ctx.download(blob, exportName(ctx.state, "png", S)); }, "image/png");
   }, [fonts]);
+
+  /* 선택된 도형의 색·선 읽기 쓰기 */
+  const selShape = (s: WoodcutState): Shape | null =>
+    active && active[0] === "s" ? parseShapes(s.shapes)[Number(active.slice(1))] ?? null : null;
+
+  const patchShape = useCallback((patch: Partial<Shape>, draft = false) => {
+    if (!active || active[0] !== "s") return;
+    const list = parseShapes(stateRef.current.shapes);
+    const i = Number(active.slice(1));
+    if (!list[i]) return;
+    list[i] = { ...list[i], ...patch };
+    onChange({ shapes: serializeShapes(list) }, draft);
+  }, [active, onChange]);
+
+  const addShape = useCallback((kind: Shape["kind"], ctx: Ctx<WoodcutState>) => {
+    const list = parseShapes(ctx.state.shapes);
+    /* 넣을 때마다 살짝 어긋나게 놓아 먼저 넣은 것에 완전히 겹치지 않게 한다 */
+    const off = (list.length % 5) * 26;
+    list.push({
+      kind, x: 500 + off, y: 500 + off, s: 200, rot: 0, skew: 0,
+      fill: ctx.state.cInk, stroke: null, sw: 0
+    });
+    onChange({ shapes: serializeShapes(list) }, false);
+    setActive(`s${list.length - 1}`);
+  }, [onChange]);
 
   const groups: Group<WoodcutState>[] = useMemo(() => [
     {
@@ -170,6 +245,101 @@ export default function Woodcut() {
         { t: "range", k: "lead", label: "줄간", min: -0.1, max: 0.5, step: 0.01, fmt: f2 }
       ]
     },
+    {
+      label: "도형 넣기",
+      controls: [
+        {
+          t: "iconbuttons",
+          options: SHAPES.map((h) => ({
+            label: h.label, icon: h.icon,
+            run: (ctx) => addShape(h.kind, ctx)
+          }))
+        }
+      ]
+    },
+    ...(active
+      ? [{
+        label: selKind === "shape" ? "선택한 도형" : `선택한 글자 「${active}」`,
+        controls: [
+          {
+            t: "vrange" as const, label: "크기",
+            min: selKind === "shape" ? 20 : 25, max: selKind === "shape" ? 900 : 320, step: 1,
+            get: (s: WoodcutState) => readSel(s, active)?.size ?? 100,
+            set: (v: number) => writeSel(active, { size: v }, true),
+            fmt: (v: number) => (selKind === "shape" ? (v / 10).toFixed(0) + "%" : v.toFixed(0) + "%")
+          },
+          {
+            t: "vrange" as const, label: "기울기", min: -50, max: 50, step: 1,
+            get: (s: WoodcutState) => readSel(s, active)?.skew ?? 0,
+            set: (v: number) => writeSel(active, { skew: v }, true),
+            fmt: (v: number) => v.toFixed(0) + "°"
+          },
+          {
+            t: "vrange" as const, label: "회전", min: -180, max: 180, step: 1,
+            get: (s: WoodcutState) => readSel(s, active)?.rot ?? 0,
+            set: (v: number) => writeSel(active, { rot: v }, true),
+            fmt: (v: number) => v.toFixed(0) + "°"
+          },
+          ...(selKind === "shape" ? [
+            {
+              t: "vtoggle" as const, label: "안쪽 채우기",
+              get: (s: WoodcutState) => !!selShape(s)?.fill,
+              set: (v: boolean, ctx: Ctx<WoodcutState>) =>
+                patchShape({ fill: v ? ctx.state.cInk : null })
+            },
+            {
+              t: "vtoggle" as const, label: "윤곽선",
+              get: (s: WoodcutState) => !!selShape(s)?.stroke,
+              set: (v: boolean, ctx: Ctx<WoodcutState>) =>
+                patchShape({ stroke: v ? ctx.state.cInk : null, sw: v ? 14 : 0 })
+            },
+            {
+              t: "vrange" as const, label: "선 두께", min: 2, max: 70, step: 1,
+              get: (s: WoodcutState) => selShape(s)?.sw ?? 0,
+              set: (v: number) => patchShape({ sw: v }, true),
+              fmt: (v: number) => v.toFixed(0)
+            },
+            {
+              t: "vcolors" as const,
+              items: [
+                {
+                  label: "채움",
+                  get: (s: WoodcutState) => selShape(s)?.fill ?? "#26231f",
+                  set: (v: string) => patchShape({ fill: v }, true)
+                },
+                {
+                  label: "선",
+                  get: (s: WoodcutState) => selShape(s)?.stroke ?? "#26231f",
+                  set: (v: string) => patchShape({ stroke: v, sw: selShape(stateRef.current)?.sw || 14 }, true)
+                }
+              ]
+            }
+          ] : []),
+          {
+            t: "buttons" as const,
+            items: [
+              {
+                label: selKind === "shape" ? "이 도형 지우기" : "이 글자 되돌리기",
+                run: (ctx: Ctx<WoodcutState>) => {
+                  if (!active) return;
+                  if (active[0] === "s") {
+                    const list = parseShapes(ctx.state.shapes);
+                    list.splice(Number(active.slice(1)), 1);
+                    onChange({ shapes: serializeShapes(list) }, false);
+                  } else {
+                    const map = new Map(parseNudges(ctx.state.nudge));
+                    map.delete(Number(active.slice(1)));
+                    onChange({ nudge: serializeNudges(map) }, false);
+                  }
+                  setActive(null);
+                }
+              },
+              { label: "선택 해제", run: () => setActive(null) }
+            ]
+          }
+        ]
+      } as Group<WoodcutState>]
+      : []),
     {
       label: "조각",
       controls: [
@@ -232,7 +402,7 @@ export default function Woodcut() {
         }
       ]
     }
-  ], [fonts]);
+  ], [fonts, active, selKind, addShape, patchShape, readSel, writeSel, onChange]);
 
   return (
     <LabShell<WoodcutState>

@@ -30,8 +30,10 @@ export type WoodcutState = {
   starve: number;
   fibre: number;
   seed: number;
-  /** 글자별 손보정 — "인덱스:dx,dy,회전" 을 세미콜론으로 이은 문자열 */
+  /** 글자별 손보정 — "인덱스:dx,dy,회전,크기,기울기" 를 세미콜론으로 이은 문자열 */
   nudge: string;
+  /** 넣은 도형 — "종류:x,y,크기,회전,기울기" 를 세미콜론으로 이은 문자열 */
+  shapes: string;
   cInk: string;
   cPaper: string;
   transparent: boolean;
@@ -167,7 +169,9 @@ export function makeCanvas(S: number) { return mk(S, S); }
    보정값은 그 위에 따라다닌다.
    저장 형식: "인덱스:dx,dy,회전" 을 세미콜론으로. 건드린 글자만 담는다.
    dx·dy 는 캔버스 크기 대비 천분율, 회전은 도(°). */
-export type Nudge = { dx: number; dy: number; rot: number };
+export type Nudge = { dx: number; dy: number; rot: number; sc: number; sk: number };
+
+export const NO_NUDGE: Nudge = { dx: 0, dy: 0, rot: 0, sc: 100, sk: 0 };
 
 export function parseNudges(s: string): Map<number, Nudge> {
   const out = new Map<number, Nudge>();
@@ -175,40 +179,170 @@ export function parseNudges(s: string): Map<number, Nudge> {
   for (const part of s.split(";")) {
     const [i, rest] = part.split(":");
     if (rest === undefined) continue;
-    const [dx, dy, rot] = rest.split(",").map(Number);
+    const v = rest.split(",").map(Number);
     const idx = Number(i);
     if (!Number.isFinite(idx)) continue;
-    out.set(idx, { dx: dx || 0, dy: dy || 0, rot: rot || 0 });
+    /* 크기·기울기는 나중에 붙은 항목이라 없을 수 있다(예전 링크). 기본값으로 채운다. */
+    out.set(idx, {
+      dx: v[0] || 0, dy: v[1] || 0, rot: v[2] || 0,
+      sc: Number.isFinite(v[3]) ? v[3] : 100,
+      sk: v[4] || 0
+    });
   }
   return out;
 }
 
+const isPlain = (n: Nudge) => !n.dx && !n.dy && !n.rot && !n.sk && n.sc === 100;
+
 export function serializeNudges(m: Map<number, Nudge>): string {
   const parts: string[] = [];
   for (const [i, n] of [...m.entries()].sort((a, b) => a[0] - b[0])) {
-    if (!n.dx && !n.dy && !n.rot) continue;
-    parts.push(`${i}:${Math.round(n.dx)},${Math.round(n.dy)},${Math.round(n.rot)}`);
+    if (isPlain(n)) continue;
+    parts.push(
+      `${i}:${Math.round(n.dx)},${Math.round(n.dy)},${Math.round(n.rot)},${Math.round(n.sc)},${Math.round(n.sk)}`
+    );
   }
   return parts.join(";");
 }
 
-/** 배치된 글자 하나. cx·cy 는 글자 중심, w·h 는 집기 판정용 상자. */
-export type GlyphBox = {
-  idx: number; ch: string;
-  bx: number; by: number;   // 글자를 찍는 기준점 (가로 중앙 · 베이스라인)
-  cx: number; cy: number;   // 집기 판정용 중심
-  w: number; h: number;
-  rot: number; scale: number; size: number;
+/* ---------- 도형 ---------- */
+export type ShapeKind =
+  | "circle" | "ellipse" | "rect" | "tri" | "star" | "diamond" | "clover" | "heart";
+
+/** x·y·s·sw 는 캔버스 크기 대비 천분율, rot·skew 는 도(°).
+ *  fill·stroke 가 null 이면 그 부분은 찍지 않는다. */
+export type Shape = {
+  kind: ShapeKind; x: number; y: number; s: number; rot: number; skew: number;
+  fill: string | null; stroke: string | null; sw: number;
 };
 
+export const SHAPES: { kind: ShapeKind; label: string; icon: string }[] = [
+  { kind: "circle", label: "원", icon: '<circle cx="24" cy="24" r="16"/>' },
+  { kind: "ellipse", label: "타원", icon: '<ellipse cx="24" cy="24" rx="18" ry="11"/>' },
+  { kind: "rect", label: "직사각형", icon: '<rect x="7" y="13" width="34" height="22"/>' },
+  { kind: "tri", label: "세모", icon: '<path d="M24 7l17 32H7z"/>' },
+  { kind: "star", label: "별", icon: '<path d="M24 6l5.3 11.9 12.7 1.4-9.5 8.7 2.6 12.6L24 34.2 12.9 40.6l2.6-12.6L6 19.3l12.7-1.4z"/>' },
+  { kind: "diamond", label: "다이아몬드", icon: '<path d="M24 6l13 18-13 18-13-18z"/>' },
+  { kind: "clover", label: "클로버", icon: '<path d="M24 6a8 8 0 0 1 6.4 12.8A8 8 0 1 1 34 34a8.6 8.6 0 0 1-7-3.6l1.8 11.6H19.2L21 30.4A8.6 8.6 0 0 1 14 34a8 8 0 1 1 3.6-15.2A8 8 0 0 1 24 6z"/>' },
+  { kind: "heart", label: "하트", icon: '<path d="M24 41C10 31 5 24 5 17.5A10.5 10.5 0 0 1 24 11a10.5 10.5 0 0 1 19 6.5C43 24 38 31 24 41z"/>' }
+];
+
+/* 색은 주소창에 실리므로 '#' 없이 여섯 자리로 적고, 없으면 '-' 로 둔다. */
+const colIn = (s: string | undefined) => (!s || s === "-" ? null : "#" + s);
+const colOut = (c: string | null) => (c ? c.replace("#", "") : "-");
+
+export function parseShapes(s: string): Shape[] {
+  if (!s) return [];
+  const out: Shape[] = [];
+  for (const part of s.split(";")) {
+    const [kind, rest] = part.split(":");
+    if (!rest || !SHAPES.some((h) => h.kind === kind)) continue;
+    const v = rest.split(",");
+    const num = (i: number, d: number) => (Number.isFinite(Number(v[i])) && v[i] !== "" ? Number(v[i]) : d);
+    out.push({
+      kind: kind as ShapeKind,
+      x: num(0, 500), y: num(1, 500), s: num(2, 150), rot: num(3, 0), skew: num(4, 0),
+      fill: colIn(v[5]), stroke: colIn(v[6]), sw: num(7, 0)
+    });
+  }
+  return out;
+}
+
+export function serializeShapes(list: Shape[]): string {
+  return list
+    .map((h) => `${h.kind}:${Math.round(h.x)},${Math.round(h.y)},${Math.round(h.s)},` +
+      `${Math.round(h.rot)},${Math.round(h.skew)},${colOut(h.fill)},${colOut(h.stroke)},${Math.round(h.sw)}`)
+    .join(";");
+}
+
+/** 원점 중심, 반지름 r 로 도형 경로를 만든다. */
+function shapePath(g: CanvasRenderingContext2D, kind: ShapeKind, r: number) {
+  g.beginPath();
+  switch (kind) {
+    case "circle":
+      g.arc(0, 0, r, 0, Math.PI * 2);
+      break;
+    case "ellipse":
+      g.ellipse(0, 0, r, r * 0.62, 0, 0, Math.PI * 2);
+      break;
+    case "rect":
+      g.rect(-r, -r * 0.66, r * 2, r * 1.32);
+      break;
+    case "tri":
+      g.moveTo(0, -r); g.lineTo(r * 0.94, r * 0.74); g.lineTo(-r * 0.94, r * 0.74); g.closePath();
+      break;
+    case "diamond":
+      g.moveTo(0, -r); g.lineTo(r * 0.72, 0); g.lineTo(0, r); g.lineTo(-r * 0.72, 0); g.closePath();
+      break;
+    case "star": {
+      for (let i = 0; i < 10; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI) / 5;
+        const rad = i % 2 ? r * 0.44 : r;
+        const x = Math.cos(a) * rad, y = Math.sin(a) * rad;
+        if (i) g.lineTo(x, y); else g.moveTo(x, y);
+      }
+      g.closePath();
+      break;
+    }
+    case "heart":
+      g.moveTo(0, r * 0.95);
+      g.bezierCurveTo(-r * 1.42, r * 0.04, -r * 0.72, -r * 1.06, 0, -r * 0.34);
+      g.bezierCurveTo(r * 0.72, -r * 1.06, r * 1.42, r * 0.04, 0, r * 0.95);
+      g.closePath();
+      break;
+    case "clover": {
+      /* 잎 반지름이 중심까지 닿아야 한다 — 모자라면 가운데에 구멍이 뚫린다 */
+      const cr = r * 0.48;
+      const lobes: [number, number][] = [[0, -r * 0.4], [-r * 0.45, r * 0.15], [r * 0.45, r * 0.15]];
+      for (const [cx, cy] of lobes) { g.moveTo(cx + cr, cy); g.arc(cx, cy, cr, 0, Math.PI * 2); }
+      g.moveTo(-r * 0.13, r * 0.1);
+      g.lineTo(r * 0.13, r * 0.1);
+      g.lineTo(r * 0.3, r); g.lineTo(-r * 0.3, r);
+      g.closePath();
+      break;
+    }
+  }
+}
+
+/** 판 위에 놓인 것 하나 — 글자든 도형이든 똑같이 집고 옮기고 돌린다.
+ *  id 는 글자면 "g0", 도형이면 "s0". */
+export type Item = {
+  id: string;
+  kind: "glyph" | "shape";
+  ch: string;               // 글자면 문자, 도형이면 종류
+  bx: number; by: number;   // 찍는 기준점 (글자는 가로 중앙·베이스라인, 도형은 중심)
+  cx: number; cy: number;   // 집기 판정용 중심
+  w: number; h: number;
+  rot: number; scale: number; skew: number; size: number;
+  fill: string | null; stroke: string | null; sw: number;
+};
+
+/* 도형은 글자 흐름 밖에 따로 놓인다. 글자보다 앞에 두어 아래에 깔린다
+   — 보통 배지·바탕으로 쓰이고 글자가 그 위에 얹히기 때문. */
+function shapeItems(C: WoodcutState, S: number): Item[] {
+  return parseShapes(C.shapes).map((h, i) => {
+    const r = ((h.s / 1000) * S) / 2;
+    return {
+      id: `s${i}`, kind: "shape" as const, ch: h.kind,
+      bx: (h.x / 1000) * S, by: (h.y / 1000) * S,
+      cx: (h.x / 1000) * S, cy: (h.y / 1000) * S,
+      w: r * 2, h: r * 2,
+      rot: (h.rot * Math.PI) / 180, scale: 1, skew: (h.skew * Math.PI) / 180,
+      size: r * 2,
+      fill: h.fill, stroke: h.stroke, sw: (h.sw / 1000) * S
+    };
+  });
+}
+
 /** 판은 한 글자씩 따로 새긴다 — 글자마다 조금씩 어긋나야 판화로 보인다.
- *  그리지 않고 자리만 계산해 돌려준다(집기 판정과 그리기가 같은 값을 쓰도록). */
+ *  그리지 않고 자리만 계산해 돌려준다(집기 판정과 그리기가 같은 값을 쓰도록).
+ *  도형이 앞, 글자가 뒤에 담긴다. */
 export function layoutGlyphs(
   g: CanvasRenderingContext2D, S: number, C: WoodcutState, fonts: FontDef[]
-): { boxes: GlyphBox[]; size: number } {
+): { items: Item[]; size: number } {
   const F = findFont(C.font, fonts);
   const lines = C.text.split("\n").map((s) => s.trim()).filter(Boolean);
-  if (!lines.length) return { boxes: [], size: 0 };
+  if (!lines.length) return { items: shapeItems(C, S), size: 0 };
 
   const REF = 100;
   g.font = `${F.weight} ${REF}px ${F.css}, system-ui, sans-serif`;
@@ -237,7 +371,7 @@ export function layoutGlyphs(
   const rnd = mulberry32(C.seed * 7919 + 13);
   const topY = (S - blockH * scale) / 2 + asc * scale;
   const nudges = parseNudges(C.nudge);
-  const boxes: GlyphBox[] = [];
+  const items: Item[] = [];
   let idx = 0;
 
   lines.forEach((_, li) => {
@@ -251,19 +385,19 @@ export function layoutGlyphs(
       const js = 1 + (rnd() - 0.5) * C.jitter * 0.6;
       const jy = (rnd() - 0.5) * C.jitter * size * 0.55;
 
-      const n = nudges.get(idx);
-      const dx = n ? (n.dx / 1000) * S : 0;
-      const dy = n ? (n.dy / 1000) * S : 0;
-      const rot = jr + (n ? (n.rot * Math.PI) / 180 : 0);
+      const n = nudges.get(idx) ?? NO_NUDGE;
+      const sc = js * (n.sc / 100);
+      const bx = penX + w / 2 + (n.dx / 1000) * S;
+      const byy = by + jy * js + (n.dy / 1000) * S;
 
-      const bx = penX + w / 2 + dx;
-      const byy = by + jy * js + dy;
-      boxes.push({
-        idx, ch, bx, by: byy,
-        cx: bx, cy: byy - (asc * scale * js) / 2,   // 글자 몸통의 대략적 중심
-        w: Math.max(w, size * 0.34) * js,
-        h: (asc + dsc) * scale * js,
-        rot, scale: js, size
+      items.push({
+        id: `g${idx}`, kind: "glyph", ch, bx, by: byy,
+        cx: bx, cy: byy - (asc * scale * sc) / 2,   // 글자 몸통의 대략적 중심
+        w: Math.max(w, size * 0.34) * sc,
+        h: (asc + dsc) * scale * sc,
+        rot: jr + (n.rot * Math.PI) / 180,
+        scale: sc, skew: (n.sk * Math.PI) / 180, size,
+        fill: C.cInk, stroke: null, sw: 0
       });
 
       penX += w + C.track * size;
@@ -271,36 +405,59 @@ export function layoutGlyphs(
     });
   });
 
-  return { boxes, size };
+  return { items: [...shapeItems(C, S), ...items], size };
 }
 
-/** 계산된 자리에 실제로 글자를 찍는다. */
-function paintGlyphs(
-  g: CanvasRenderingContext2D, boxes: GlyphBox[], S: number, C: WoodcutState, fonts: FontDef[]
+/* 한 번의 붓질 = 한 가지 색. 색이 다르면 판을 따로 판다. */
+type Stroke = { color: string; item: Item; outline: boolean };
+
+/** 항목들을 "색별 붓질" 로 펼친다. 도형은 채움과 선이 서로 다른 판에 갈 수 있다. */
+function strokesOf(items: Item[]): Stroke[] {
+  const out: Stroke[] = [];
+  for (const b of items) {
+    if (b.fill) out.push({ color: b.fill, item: b, outline: false });
+    if (b.stroke && b.sw > 0.2) out.push({ color: b.stroke, item: b, outline: true });
+  }
+  return out;
+}
+
+/** 한 판에 속한 붓질들을 흰색으로 찍는다 (이후 블러·임계값을 먹인다). */
+function paintStrokes(
+  g: CanvasRenderingContext2D, list: Stroke[], C: WoodcutState, fonts: FontDef[]
 ) {
-  if (!boxes.length) return;
   const F = findFont(C.font, fonts);
-  g.font = `${F.weight} ${boxes[0].size}px ${F.css}, system-ui, sans-serif`;
   g.textBaseline = "alphabetic";
   g.textAlign = "center";
   g.fillStyle = "#fff";
-  for (const b of boxes) {
+  g.strokeStyle = "#fff";
+  g.lineJoin = "round";
+  g.lineCap = "round";
+  for (const { item: b, outline } of list) {
     g.save();
     g.translate(b.bx, b.by);
     g.rotate(b.rot);
-    g.scale(b.scale, b.scale);
-    g.fillText(b.ch, 0, 0);
+    if (b.skew) g.transform(1, 0, Math.tan(b.skew), 1, 0, 0); // 가로 전단 = 기울임
+    if (b.kind === "glyph") {
+      g.font = `${F.weight} ${b.size}px ${F.css}, system-ui, sans-serif`;
+      g.scale(b.scale, b.scale);
+      g.fillText(b.ch, 0, 0);
+    } else {
+      shapePath(g, b.ch as ShapeKind, b.w / 2);
+      if (outline) { g.lineWidth = b.sw; g.stroke(); } else g.fill();
+    }
     g.restore();
   }
   g.textAlign = "left";
 }
 
-/** 캔버스 좌표에서 글자를 집는다. 잉크가 번져 서로 붙기 때문에
- *  잉크 모양이 아니라 글자 상자 기준으로 판정한다. */
-export function pickGlyph(boxes: GlyphBox[], x: number, y: number): GlyphBox | null {
-  let best: GlyphBox | null = null;
+/** 캔버스 좌표에서 항목을 집는다. 잉크가 번져 서로 붙기 때문에
+ *  잉크 모양이 아니라 상자 기준으로 판정한다.
+ *  뒤에 놓인 것(= 나중에 넣은 도형)이 먼저 잡히도록 뒤에서부터 본다. */
+export function pickItem(items: Item[], x: number, y: number): Item | null {
+  let best: Item | null = null;
   let bestD = Infinity;
-  for (const b of boxes) {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const b = items[i];
     const dx = Math.abs(x - b.cx) / (b.w / 2);
     const dy = Math.abs(y - b.cy) / (b.h / 2);
     if (dx > 1.25 || dy > 1.25) continue;
@@ -311,25 +468,53 @@ export function pickGlyph(boxes: GlyphBox[], x: number, y: number): GlyphBox | n
 }
 
 /* ---------- 조각 → 잉킹 ---------- */
-/** 잉크가 앉은 자리만 불투명한 마스크. withGrain=false 면 결손 없는 '판' 그대로. */
-export function buildMask(
+/** 색 하나에 판 하나. 같은 색끼리는 한 판에서 번져 붙고, 다른 색은 따로 찍혀 겹친다. */
+export type Block = { color: string; mask: HTMLCanvasElement };
+
+/** 찍을 판들을 색 순서대로 만든다. withGrain=false 면 결손 없는 '판' 그대로. */
+export function buildBlocks(
   S: number, C: WoodcutState, fonts: FontDef[], withGrain = true
+): Block[] {
+  const probe = ctx2d(pool("probe", 8, 8));
+  const { items, size } = layoutGlyphs(probe, S, C, fonts);
+  if (!items.length) return [];
+
+  /* 색이 나온 순서대로 판을 나눈다 — 먼저 나온 색이 아래에 깔린다 */
+  const order: string[] = [];
+  const byColor = new Map<string, Stroke[]>();
+  for (const st of strokesOf(items)) {
+    let g = byColor.get(st.color);
+    if (!g) { g = []; byColor.set(st.color, g); order.push(st.color); }
+    g.push(st);
+  }
+  if (!order.length) return [];
+
+  /* 글자가 없고 도형만 있을 때도 조각 크기 기준이 필요하다 */
+  const ref = size || items.reduce((a, b) => Math.max(a, b.h), 0) || S * 0.2;
+  return order.map((color, i) => ({
+    color,
+    mask: carve(S, C, fonts, byColor.get(color)!, ref, withGrain, i)
+  }));
+}
+
+/** 붓질 한 묶음을 판 하나로 새긴다. */
+function carve(
+  S: number, C: WoodcutState, fonts: FontDef[], list: Stroke[],
+  ref: number, withGrain: boolean, slot: number
 ): HTMLCanvasElement {
   const raw = pool("glyph", S, S);
   const rg = ctx2d(raw);
   rg.setTransform(1, 0, 0, 1, 0, 0);
   rg.clearRect(0, 0, S, S);
-  const { boxes, size } = layoutGlyphs(rg, S, C, fonts);
-  paintGlyphs(rg, boxes, S, C, fonts);
+  paintStrokes(rg, list, C, fonts);
 
-  const out = pool("mask", S, S);
+  const out = pool(`mask${slot}`, S, S);
   const og = ctx2d(out);
   og.setTransform(1, 0, 0, 1, 0, 0);
   og.clearRect(0, 0, S, S);
-  if (!size) return out;
 
   const T = findTool(C.tool);
-  const blurPx = C.toolSize * size * T.blur;
+  const blurPx = C.toolSize * ref * T.blur;
 
   // 블러 = 조각도. 이 한 번이 모서리 라운딩·카운터 타원화·획 융합을 전부 만든다.
   const soft = pool("soft", S, S);
@@ -345,7 +530,7 @@ export function buildMask(
   const dst = img.data;
 
   // 손떨림 결은 조각도 크기를 따라간다 — 큰 끌은 크게, 작은 칼은 잘게 흔들린다
-  const cell = Math.max(7, blurPx * 3.4 + size * 0.05);
+  const cell = Math.max(7, blurPx * 3.4 + ref * 0.05);
   const wobF = C.wobble > 0.001 ? buildField(S, C.seed, cell, T.gain, T.ridged) : null;
   const g = baseNoise(C.seed);
   const chatAmp = C.chatter * T.chat;
@@ -355,8 +540,8 @@ export function buildMask(
   /* 노이즈 결의 크기는 전부 글자 크기에 비례해야 한다.
      픽셀 절대값으로 두면 2×·3× 로 내보낼 때 질감만 잘게 변해서
      미리보기와 다른 그림이 나온다. */
-  const chatCell = Math.max(1.6, size * 0.018);
-  const starveCell = Math.max(2.4, size * 0.045);
+  const chatCell = Math.max(1.6, ref * 0.018);
+  const starveCell = Math.max(2.4, ref * 0.045);
   /* 결손이 안쪽까지 고르게 퍼지면 판화가 아니라 사포가 된다.
      안쪽 바닥값은 아주 낮게 두고 가장자리에서만 확 올린다. */
   const FLOOR = 0.05;
@@ -392,7 +577,7 @@ export function buildMask(
 /** 종이 + 잉크로 최종 합성.
  *  active 는 드래그 중인 글자 표시 — 화면에서만 그리고 내보내기에는 절대 넣지 않는다. */
 export function compose(
-  target: HTMLCanvasElement, S: number, C: WoodcutState, fonts: FontDef[], active?: number | null
+  target: HTMLCanvasElement, S: number, C: WoodcutState, fonts: FontDef[], active?: string | null
 ) {
   const g = ctx2d(target);
   g.setTransform(1, 0, 0, 1, 0, 0);
@@ -418,22 +603,24 @@ export function compose(
     }
   }
 
-  const mask = buildMask(S, C, fonts, true);
-  const ink = pool("ink", S, S);
-  const ig = ctx2d(ink);
-  ig.setTransform(1, 0, 0, 1, 0, 0);
-  ig.clearRect(0, 0, S, S);
-  ig.drawImage(mask, 0, 0);
-  ig.globalCompositeOperation = "source-in";
-  ig.fillStyle = C.cInk;
-  ig.fillRect(0, 0, S, S);
-  ig.globalCompositeOperation = "source-over";
-  g.drawImage(ink, 0, 0);
+  /* 판을 색 순서대로 겹쳐 찍는다 */
+  for (const b of buildBlocks(S, C, fonts, true)) {
+    const ink = pool("ink", S, S);
+    const ig = ctx2d(ink);
+    ig.setTransform(1, 0, 0, 1, 0, 0);
+    ig.clearRect(0, 0, S, S);
+    ig.drawImage(b.mask, 0, 0);
+    ig.globalCompositeOperation = "source-in";
+    ig.fillStyle = b.color;
+    ig.fillRect(0, 0, S, S);
+    ig.globalCompositeOperation = "source-over";
+    g.drawImage(ink, 0, 0);
+  }
 
-  if (active != null) {
+  if (active) {
     /* 자리 계산은 글자 폭 측정만 쓰므로 작은 캔버스로 충분하다 */
     const pg = ctx2d(pool("probe", 8, 8));
-    const b = layoutGlyphs(pg, S, C, fonts).boxes.find((x) => x.idx === active);
+    const b = layoutGlyphs(pg, S, C, fonts).items.find((x) => x.id === active);
     if (b) {
       g.save();
       g.strokeStyle = "#1B3ECC";
@@ -442,7 +629,8 @@ export function compose(
       g.globalAlpha = 0.9;
       g.translate(b.cx, b.cy);
       g.rotate(b.rot);
-      const pad = b.size * 0.1;
+      if (b.skew) g.transform(1, 0, Math.tan(b.skew), 1, 0, 0);
+      const pad = Math.max(b.w, b.h) * 0.08;
       g.strokeRect(-b.w / 2 - pad, -b.h / 2 - pad, b.w + pad * 2, b.h + pad * 2);
       g.restore();
     }
