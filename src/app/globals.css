@@ -177,3 +177,79 @@ label.tog input{accent-color:var(--accent);width:14px;height:14px}
   .lab-tag{display:none}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* =============================================================
+   갤러리
+   ============================================================= */
+.page{min-height:100dvh;display:flex;flex-direction:column}
+.hero{padding:56px 24px 34px;border-bottom:1px solid var(--rule);background:var(--panel)}
+.hero-in{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.eyebrow{
+  display:flex;align-items:center;gap:10px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--ink-3);
+}
+.eyebrow .dot{width:22px;height:22px;border-radius:50%;background:var(--accent);
+  box-shadow:inset -6px -4px 0 0 rgba(0,0,0,.32)}
+h1.page-t{
+  font-family:var(--display);font-weight:800;font-size:clamp(30px,5vw,46px);
+  letter-spacing:-.035em;margin:0;text-wrap:balance;
+}
+.lede{margin:0;color:var(--ink-2);font-size:15px;line-height:1.6;max-width:62ch}
+.lede code{font-family:var(--mono);font-size:13px;background:var(--panel-2);
+  border:1px solid var(--rule-soft);border-radius:3px;padding:1px 5px}
+.page main{flex:1;padding:34px 24px 64px}
+.grid{max-width:980px;margin:0 auto;display:grid;gap:14px;
+  grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.card{display:flex;flex-direction:column;gap:12px;padding:18px;background:var(--panel);
+  border:1px solid var(--rule);border-radius:4px;text-decoration:none;color:inherit}
+a.card:hover{border-color:var(--accent)}
+a.card:hover .card-t{color:var(--accent)}
+.card.soon{background:transparent;border-style:dashed;color:var(--ink-2)}
+.card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.card svg{width:56px;height:56px;color:var(--ink);flex:none}
+.card.soon svg{color:var(--ink-3);opacity:.55}
+.status{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  padding:3px 7px;border-radius:100px;white-space:nowrap}
+.status.live{background:var(--accent);color:var(--accent-ink)}
+.status.soon{border:1px solid var(--rule);color:var(--ink-3)}
+.card-t{font-family:var(--display);font-weight:700;font-size:17px;letter-spacing:-.02em;margin:0}
+.card-d{margin:0;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
+.tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:auto;padding-top:4px}
+.tag{font-family:var(--mono);font-size:10px;color:var(--ink-3);
+  border:1px solid var(--rule-soft);border-radius:100px;padding:2px 7px}
+.foot{border-top:1px solid var(--rule);padding:18px 24px;background:var(--panel);
+  font-size:12px;color:var(--ink-3)}
+.foot-in{max-width:980px;margin:0 auto;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.foot-in a{color:var(--ink-2)}
+
+/* =============================================================
+   실험 설명 글 (MDX)
+   ============================================================= */
+.article{background:var(--paper);border-top:1px solid var(--rule);padding:52px 24px 72px}
+.article-in{max-width:66ch;margin:0 auto}
+.article h2{
+  font-family:var(--display);font-weight:700;font-size:24px;letter-spacing:-.02em;
+  margin:44px 0 12px;text-wrap:balance;
+}
+.article h2:first-child{margin-top:0}
+.article h3{font-family:var(--display);font-weight:700;font-size:17px;margin:28px 0 8px}
+.article p{margin:0 0 14px;line-height:1.75;color:var(--ink-2)}
+.article strong{color:var(--ink);font-weight:600}
+.article ul,.article ol{margin:0 0 16px;padding-left:20px;color:var(--ink-2);line-height:1.75}
+.article li{margin-bottom:5px}
+.article code{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);
+  border:1px solid var(--rule-soft);border-radius:3px;padding:1px 5px;color:var(--ink)}
+.article pre{background:var(--panel);border:1px solid var(--rule);border-radius:4px;
+  padding:14px 16px;overflow-x:auto;margin:0 0 18px}
+.article pre code{background:none;border:none;padding:0;font-size:12px;line-height:1.6}
+.article a{color:var(--accent);text-underline-offset:3px}
+.article blockquote{margin:0 0 18px;padding:2px 0 2px 16px;border-left:3px solid var(--accent);
+  color:var(--ink-2)}
+.article hr{border:none;border-top:1px solid var(--rule-soft);margin:36px 0}
+.article-nav{max-width:66ch;margin:40px auto 0;display:flex;gap:12px;flex-wrap:wrap}
+
+/* 실험실 페이지: 셸을 꽉 채우지 않고 글이 아래로 이어지게 */
+.lab-page .shell{height:auto}
+.lab-page .main{height:calc(100dvh - 52px);min-height:520px}
+@media (max-width:900px){.lab-page .main{height:auto}}
