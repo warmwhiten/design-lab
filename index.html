@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>design-lab</title>
+<meta name="description" content="다희의 디자인 실험실 — 브라우저에서 바로 돌려보는 작은 인터랙티브 도구 모음.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=DM+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="./assets/shell.css">
+<style>
+  body{min-height:100dvh;display:flex;flex-direction:column}
+  .hero{
+    padding:56px 24px 34px;border-bottom:1px solid var(--rule);
+    background:var(--panel);
+  }
+  .hero-in{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+  .mark{display:flex;align-items:center;gap:10px}
+  .mark .dot{width:22px;height:22px;border-radius:50%;background:var(--accent);
+    box-shadow:inset -6px -4px 0 0 rgba(0,0,0,.32)}
+  h1{
+    font-family:var(--display);font-weight:800;font-size:clamp(30px,5vw,46px);
+    letter-spacing:-.035em;margin:0;text-wrap:balance;
+  }
+  .lede{margin:0;color:var(--ink-2);font-size:15px;line-height:1.6;max-width:62ch}
+  .lede code{font-family:var(--mono);font-size:13px;background:var(--panel-2);
+    border:1px solid var(--rule-soft);border-radius:3px;padding:1px 5px}
+
+  main{flex:1;padding:34px 24px 64px}
+  .grid{
+    max-width:980px;margin:0 auto;display:grid;gap:14px;
+    grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  }
+  .card{
+    display:flex;flex-direction:column;gap:12px;padding:18px;
+    background:var(--panel);border:1px solid var(--rule);border-radius:4px;
+    text-decoration:none;color:inherit;
+  }
+  a.card:hover{border-color:var(--accent)}
+  a.card:hover .card-t{color:var(--accent)}
+  .card.soon{background:transparent;border-style:dashed;color:var(--ink-2)}
+  .card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .card svg{width:56px;height:56px;color:var(--ink);flex:none}
+  .card.soon svg{color:var(--ink-3);opacity:.55}
+  .status{
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+    padding:3px 7px;border-radius:100px;white-space:nowrap;
+  }
+  .status.live{background:var(--accent);color:var(--accent-ink)}
+  .status.soon{border:1px solid var(--rule);color:var(--ink-3)}
+  .card-t{font-family:var(--display);font-weight:700;font-size:17px;letter-spacing:-.02em;margin:0}
+  .card-d{margin:0;font-size:12.5px;line-height:1.55;color:var(--ink-2)}
+  .tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:auto;padding-top:4px}
+  .tag{
+    font-family:var(--mono);font-size:10px;color:var(--ink-3);
+    border:1px solid var(--rule-soft);border-radius:100px;padding:2px 7px;
+  }
+  footer{
+    border-top:1px solid var(--rule);padding:18px 24px;background:var(--panel);
+    font-size:12px;color:var(--ink-3);
+  }
+  .foot-in{max-width:980px;margin:0 auto;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+  .foot-in a{color:var(--ink-2)}
+</style>
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-in">
+      <div class="mark"><span class="dot"></span>
+        <span style="font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)">warmwhiten / design-lab</span>
+      </div>
+      <h1>디자인 실험실</h1>
+      <p class="lede">브라우저에서 바로 돌려보는 작은 도구들. 파라미터를 슬라이더로 만지면 결과가 즉시 바뀌고, 만든 조합은 주소창 링크 그대로 공유됩니다. 각 실험은 <code>lab/&lt;slug&gt;/</code> 하나로 독립돼 있고 공통 셸(<code>assets/shell.js</code>)을 함께 씁니다.</p>
+    </div>
+  </header>
+
+  <main><div class="grid" id="grid"></div></main>
+
+  <footer><div class="foot-in">
+    <span>© <span id="yr"></span> warmwhiten</span>
+    <a href="https://github.com/warmwhiten/design-lab">GitHub</a>
+  </div></footer>
+
+<script src="./assets/labs.js"></script>
+<script>
+(function () {
+  var grid = document.getElementById("grid");
+  document.getElementById("yr").textContent = new Date().getFullYear();
+  window.LABS.forEach(function (L) {
+    var live = L.status === "live";
+    var node = document.createElement(live ? "a" : "div");
+    node.className = "card" + (live ? "" : " soon");
+    if (live) node.href = "./lab/" + L.slug + "/";
+    node.innerHTML =
+      '<div class="card-top">' +
+        '<svg viewBox="0 0 64 64" aria-hidden="true">' + L.mark + '</svg>' +
+        '<span class="status ' + L.status + '">' + (live ? "열림" : "준비 중") + '</span>' +
+      '</div>' +
+      '<h2 class="card-t">' + L.title + '</h2>' +
+      '<p class="card-d">' + L.tagline + '</p>' +
+      '<div class="tags">' + L.tags.map(function (t) { return '<span class="tag">' + t + '</span>'; }).join("") + '</div>';
+    grid.appendChild(node);
+  });
+})();
+</script>
+</body>
+</html>
