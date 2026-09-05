@@ -146,7 +146,7 @@ label.tog input{accent-color:var(--accent);width:16px;height:16px;flex:none}
 }
 .canvas-wrap canvas{
   display:block;width:auto;height:auto;max-width:100%;max-height:100%;
-  min-width:0;min-height:0;aspect-ratio:1/1;box-shadow:var(--shadow);background:transparent;
+  min-width:0;min-height:0;aspect-ratio:var(--canvas-ar,1/1);box-shadow:var(--shadow);background:transparent;
 }
 .bar{
   border-top:1px solid var(--rule);background:var(--panel);padding:10px 16px;

@@ -58,6 +58,8 @@ type Props<S extends Record<string, any>> = {
   meta?: string;
   /** 캔버스에 붙일 접근성 이름. 현재 상태를 담으면 보조기술에도 결과가 전달된다. */
   canvasLabel?: string;
+  /** 캔버스 가로세로비. 생략하면 정사각. 예) "4 / 5" */
+  aspect?: string;
 };
 
 /* ---------- 상태 ↔ 쿼리스트링 ---------- */
@@ -93,7 +95,8 @@ function writeURL<S extends Record<string, any>>(state: S, defaults: S) {
 }
 
 export default function LabShell<S extends Record<string, any>>({
-  slug, title, tagline, defaults, state, onChange, groups, actions, canvasRef, meta, canvasLabel
+  slug, title, tagline, defaults, state, onChange, groups, actions, canvasRef, meta,
+  canvasLabel, aspect
 }: Props<S>) {
   const [msg, setMsg] = useState("");
   const [saved, setSaved] = useState<string | null>(null);
@@ -173,7 +176,7 @@ export default function LabShell<S extends Record<string, any>>({
 
         <div className="stage">
           {/* 결과물 자체라 이름이 없으면 보조기술에는 빈 상자로 남는다 */}
-          <div className="canvas-wrap">
+          <div className="canvas-wrap" style={{ "--canvas-ar": aspect ?? "1 / 1" } as React.CSSProperties}>
             <canvas ref={canvasRef} role="img" aria-label={canvasLabel ?? `${title} 미리보기`} />
           </div>
           <div className="bar">

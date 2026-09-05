@@ -30,7 +30,7 @@ src/
     page.tsx                   갤러리 (CollectionPage JSON-LD)
     globals.css                공통 토큰 · 레일 · 스테이지 · 아티클 스타일
     sitemap.ts / robots.ts     정적 생성
-    lab/framefit/
+    lab/<slug>/
       page.tsx                 메타데이터 + 도구 + 설명 글
       article.mdx              "이게 어떻게 동작하는가"
   components/LabShell.tsx      공통 셸 (컨트롤 자동 생성 · URL 동기화 · 내보내기)
@@ -39,6 +39,12 @@ src/
     svg.ts                     마칭 스퀘어 → SVG
     config.ts                  기본값 · 프리셋
     Framefit.tsx               'use client' 캔버스 컴포넌트
+  labs/stencil/
+    noise.ts                   순열 표 기반 노이즈 · fBm · 종이 섬유
+    mask.ts                    사진/글씨 → 실루엣 (오츠 · 소벨 · 다수결 · 블러)
+    engine.ts                  종이 · 잉크 필드 · 질감 합성 (DOM 무관)
+    config.ts                  기본값 · 프리셋
+    Stencil.tsx                'use client' 캔버스 컴포넌트
 public/og/                     OG 이미지
 .github/workflows/deploy.yml   Pages 배포
 ```
@@ -72,6 +78,7 @@ public/og/                     OG 이미지
 - 드래그 중 저해상도 초안 → 놓으면 고해상도 (`onChange` 의 `draft` 인자)
 - 다운로드 + 샌드박스 환경 폴백
 - 라이트/다크 테마, 모바일 스택 레이아웃
+- 캔버스 가로세로비 — `aspect="0.8 / 1"` 을 넘기면 정사각이 아닌 판도 그릴 수 있다 (기본 1:1)
 
 ## 새 실험실 추가하기
 
@@ -101,6 +108,25 @@ public/og/                     OG 이미지
 글자는 세로 1픽셀 열 단위로 잘려 그 구간에 맞춰 늘어난다. 폰트 아웃라인을 파싱하지 않으므로
 opentype.js 같은 의존성이 없고, 사용자가 업로드한 폰트도 그대로 동작한다.
 SVG 는 마칭 스퀘어 윤곽 추적 → 이동 평균 → RDP 단순화로 뽑는다.
+
+## 실험 2 — Stencil Print Lab
+
+사진이나 글씨에서 실루엣·윤곽선을 따고, 뚫린 자리 뒤를 색연필 · 점묘 · 판화 질감으로 채운다.
+자세한 원리는 `src/app/lab/stencil/article.mdx`.
+
+핵심은 **흰 부분이 주인공**이라는 것이다. 배경을 칠하고 흰 도형을 덮는 게 아니라,
+실제 스텐실처럼 잉크를 뚫는다. 그래야 번짐이 경계를 넘나들고 종이 섬유가 잉크를 뚫고 올라온다.
+네 겹(종이 · 잉크 필드 · 마스크 · 질감)을 따로 그리지 않고 픽셀마다 한 번에 섞는 이유다.
+
+사진 실루엣의 기본 임계값은 **오츠**가 정하고 슬라이더는 거기서 ±로만 민다.
+`선` 모드는 임계값 대신 소벨 기울기를 쓴다. 글씨는 캔버스에 그린 알파가 이미 이진 실루엣이라
+사진 파이프라인의 마지막 단계에 그대로 꽂힌다.
+
+모든 노이즈 주파수는 캔버스 짧은 변 기준으로 정규화돼 있어서
+1080px 미리보기와 3240px 내보내기가 픽셀 밀도만 다른 같은 그림이다.
+
+`engine.ts` 의 `render()` 는 DOM 을 전혀 건드리지 않는다 (`compose()` 가 캔버스 껍데기).
+`public/og/stencil.png` 도 이 함수를 Node 에서 그대로 돌려 뽑았다.
 
 ## 라이선스
 

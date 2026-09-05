@@ -46,6 +46,21 @@ export const LABS: Lab[] = [
     mark: '<path d="M11 15c-2 10-1 24 2 32 7 5 30 6 38 1 4-9 4-26 0-34-8-5-34-4-40 1z" fill="currentColor"/><ellipse cx="31" cy="31" rx="9" ry="6.5" fill="var(--panel)"/><path d="M46 12l4 3-3 4z" fill="currentColor"/><path d="M14 49l5 2-4 3z" fill="currentColor"/>'
   },
   {
+    slug: "stencil",
+    title: "Stencil Print Lab",
+    tagline: "사진·글씨에서 실루엣을 따고, 그 뒤를 색연필·점묘·판화 질감으로 채운다.",
+    description:
+      "사진이나 글씨에서 실루엣과 윤곽선을 자동으로 따내고, 뚫린 자리 뒤를 색연필 그레인·점묘화·리소그래프 판화 질감으로 채워 포스터를 만드는 무료 도구. 잉크 색·그라디언트·격자 반복·종이 결까지 슬라이더로 조작하고 PNG로 내보냅니다.",
+    keywords: [
+      "사진 실루엣 만들기", "사진 윤곽선 따기", "리소그래프 효과", "판화 느낌 만들기",
+      "점묘화 변환", "실크스크린 포스터", "색연필 질감", "스텐실 포스터",
+      "risograph generator", "stencil print effect", "silhouette from photo"
+    ],
+    tags: ["이미지", "인쇄", "질감"],
+    status: "live",
+    mark: '<rect x="4" y="4" width="56" height="56" rx="5" fill="currentColor"/><path d="M32 9c2.2 14.5 6.5 18.8 21 21-14.5 2.2-18.8 6.5-21 21-2.2-14.5-6.5-18.8-21-21 14.5-2.2 18.8-6.5 21-21z" fill="var(--panel)"/><circle cx="13" cy="13" r="2.6" fill="var(--panel)"/><circle cx="51" cy="51" r="2.6" fill="var(--panel)"/><circle cx="51" cy="13" r="1.8" fill="var(--panel)"/><circle cx="13" cy="51" r="1.8" fill="var(--panel)"/>'
+  },
+  {
     slug: "halftone",
     title: "Halftone Lab",
     tagline: "사진을 인쇄용 하프톤으로. 점 모양·각도·밀도·CMYK 분리를 슬라이더로.",
