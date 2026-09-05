@@ -196,6 +196,17 @@ export default function Woodcut() {
     cv.toBlob((blob) => { if (blob) ctx.download(blob, exportName(ctx.state, "png", S)); }, "image/png");
   }, [fonts]);
 
+  /* 고를 수 있는 항목 목록 — 도형이 아래에 깔리므로 먼저 놓는다 */
+  const itemList = useMemo(() => {
+    const shapes = parseShapes(state.shapes).map((h, i) => ({
+      value: `s${i}`,
+      label: `도형 ${i + 1} · ${SHAPES.find((x) => x.kind === h.kind)?.label ?? h.kind}`
+    }));
+    const chars = state.text.split("\n").map((s) => s.trim()).filter(Boolean).join("");
+    const glyphs = [...chars].map((ch, i) => ({ value: `g${i}`, label: `글자 ${i + 1} · ${ch}` }));
+    return [...shapes, ...glyphs];
+  }, [state.shapes, state.text]);
+
   /* 선택된 도형의 색·선 읽기 쓰기 */
   const selShape = (s: WoodcutState): Shape | null =>
     active && active[0] === "s" ? parseShapes(s.shapes)[Number(active.slice(1))] ?? null : null;
@@ -226,7 +237,7 @@ export default function Woodcut() {
       label: "글자",
       controls: [
         { t: "textarea", k: "text", rows: 2, hint: "줄바꿈으로 여러 줄. 캔버스에서 글자를 끌어 옮기고, Alt(또는 Shift) 를 누른 채 끌면 돌아갑니다." },
-        { t: "select", k: "font", options: fonts.map((f) => ({ value: f.id, label: f.label })) },
+        { t: "select", k: "font", label: "폰트", options: fonts.map((f) => ({ value: f.id, label: f.label })) },
         {
           t: "file", label: "내 폰트 쓰기 (.ttf / .otf / .woff2)", accept: ".ttf,.otf,.woff,.woff2,font/*",
           onFile: async (file, ctx) => {
@@ -243,6 +254,36 @@ export default function Woodcut() {
         { t: "range", k: "size", label: "크기", min: 0.4, max: 0.96, step: 0.01, fmt: pct },
         { t: "range", k: "track", label: "자간", min: -0.09, max: 0.2, step: 0.005, fmt: f3 },
         { t: "range", k: "lead", label: "줄간", min: -0.1, max: 0.5, step: 0.01, fmt: f2 }
+      ]
+    },
+    {
+      label: "배치",
+      controls: [
+        /* 캔버스 드래그만 있으면 포인터 없이는 배치를 못 한다.
+           고르기와 옮기기를 네이티브 폼 컨트롤로도 열어 둔다. */
+        {
+          t: "vselect", label: "고를 항목 (캔버스에서 직접 집어도 됩니다)",
+          options: [{ value: "", label: "선택 안 함" }, ...itemList],
+          get: () => active ?? "",
+          set: (v) => setActive(v || null)
+        },
+        /* 도형은 절대 좌표, 글자는 자동 배치에서의 이동량이라 범위가 다르다 */
+        ...(active ? [
+          {
+            t: "vrange" as const, label: selKind === "shape" ? "가로 위치" : "가로 이동",
+            min: selKind === "shape" ? 0 : -500, max: selKind === "shape" ? 1000 : 500, step: 1,
+            get: (s: WoodcutState) => readSel(s, active)?.x ?? 0,
+            set: (v: number) => writeSel(active, { x: v }, true),
+            fmt: (v: number) => v.toFixed(0)
+          },
+          {
+            t: "vrange" as const, label: selKind === "shape" ? "세로 위치" : "세로 이동",
+            min: selKind === "shape" ? 0 : -500, max: selKind === "shape" ? 1000 : 500, step: 1,
+            get: (s: WoodcutState) => readSel(s, active)?.y ?? 0,
+            set: (v: number) => writeSel(active, { y: v }, true),
+            fmt: (v: number) => v.toFixed(0)
+          }
+        ] : [])
       ]
     },
     {
@@ -402,7 +443,7 @@ export default function Woodcut() {
         }
       ]
     }
-  ], [fonts, active, selKind, addShape, patchShape, readSel, writeSel, onChange]);
+  ], [fonts, active, selKind, itemList, addShape, patchShape, readSel, writeSel, onChange]);
 
   return (
     <LabShell<WoodcutState>
@@ -415,6 +456,11 @@ export default function Woodcut() {
       groups={groups}
       canvasRef={canvasRef}
       meta={meta}
+      canvasLabel={
+        `판화 질감으로 새긴 «${state.text.replace(/\n/g, " ") || "글자 없음"}»` +
+        ` · ${TOOLS.find((t) => t.value === state.tool)?.label}` +
+        (parseShapes(state.shapes).length ? ` · 도형 ${parseShapes(state.shapes).length}개` : "")
+      }
       actions={[
         {
           label: "SVG 저장 (판)", primary: true,

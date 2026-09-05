@@ -58,13 +58,13 @@ a{color:inherit}
   color:var(--ink-2); padding:3px 8px 3px 4px; border-radius:100px;
   border:1px solid transparent;
 }
-.brand:hover{border-color:var(--rule); color:var(--ink)}
+@media (hover:hover){.brand:hover{border-color:var(--rule); color:var(--ink)}}
 .brand .dot{
   width:15px;height:15px;border-radius:50%;background:var(--accent);
   box-shadow:inset -4px -3px 0 0 rgba(0,0,0,.32);
 }
 .top .sep{width:1px;height:20px;background:var(--rule)}
-.lab-title{font-family:var(--display);font-weight:700;font-size:16px;letter-spacing:-.02em}
+.lab-title{font-family:var(--display);font-weight:700;font-size:16px;letter-spacing:-.02em;margin:0}
 .lab-tag{color:var(--ink-2);font-size:12.5px;max-width:56ch;flex:1 1 240px;min-width:0}
 .top-tools{display:flex;gap:8px;align-items:center;margin-left:auto}
 
@@ -103,7 +103,7 @@ input[type=file]{font-size:11px;padding:6px}
   aspect-ratio:1/.82;background:var(--panel-2);border:1px solid var(--rule);border-radius:3px;
   cursor:pointer;display:grid;place-items:center;padding:0;transition:background .12s,border-color .12s;
 }
-.icon-b:hover{border-color:var(--ink-3)}
+@media (hover:hover){.icon-b:hover{border-color:var(--ink-3)}}
 .icon-b svg{width:70%;height:70%}
 .icon-b .sh{fill:var(--ink-2)}
 .icon-b[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
@@ -113,21 +113,21 @@ input[type=file]{font-size:11px;padding:6px}
   border:1px solid var(--rule);background:var(--panel-2);border-radius:100px;
   padding:4px 10px;font-size:11.5px;cursor:pointer;color:var(--ink-2);
 }
-.chip:hover{border-color:var(--ink-3);color:var(--ink)}
+@media (hover:hover){.chip:hover{border-color:var(--ink-3);color:var(--ink)}}
 .swatches{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .sw{display:flex;flex-direction:column;gap:5px;align-items:flex-start}
 .sw span{font-size:11px;color:var(--ink-2)}
 .sw input[type=color]{width:100%;height:26px;padding:0;border:1px solid var(--rule);border-radius:3px;background:none;cursor:pointer}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-label.tog{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--ink-2);cursor:pointer}
-label.tog input{accent-color:var(--accent);width:14px;height:14px}
+label.tog{display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--ink-2);cursor:pointer;min-height:24px}
+label.tog input{accent-color:var(--accent);width:16px;height:16px;flex:none}
 .btn{
   border:1px solid var(--rule);background:var(--panel-2);border-radius:3px;
   padding:7px 12px;cursor:pointer;font-size:12.5px;font-weight:500;
 }
-.btn:hover{border-color:var(--ink-3)}
+@media (hover:hover){.btn:hover{border-color:var(--ink-3)}}
 .btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
-.btn.pri:hover{filter:brightness(1.06)}
+@media (hover:hover){.btn.pri:hover{filter:brightness(1.06)}}
 .btn.sm{padding:5px 9px;font-size:11.5px}
 
 /* ---------- 스테이지 ---------- */
@@ -203,8 +203,10 @@ h1.page-t{
   grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
 .card{display:flex;flex-direction:column;gap:12px;padding:18px;background:var(--panel);
   border:1px solid var(--rule);border-radius:4px;text-decoration:none;color:inherit}
-a.card:hover{border-color:var(--accent)}
-a.card:hover .card-t{color:var(--accent)}
+@media (hover:hover){
+  a.card:hover{border-color:var(--accent)}
+  a.card:hover .card-t{color:var(--accent)}
+}
 .card.soon{background:transparent;border-style:dashed;color:var(--ink-2)}
 .card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
 .card svg{width:56px;height:56px;color:var(--ink);flex:none}

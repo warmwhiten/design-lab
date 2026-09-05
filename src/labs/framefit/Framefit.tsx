@@ -82,7 +82,7 @@ export default function Framefit() {
     {
       label: "레터폼",
       controls: [
-        { t: "select", k: "font", options: fonts.map((f) => ({ value: f.id, label: f.label })) },
+        { t: "select", k: "font", label: "폰트", options: fonts.map((f) => ({ value: f.id, label: f.label })) },
         {
           t: "file", label: "내 폰트 쓰기 (.ttf / .otf / .woff2)", accept: ".ttf,.otf,.woff,.woff2,font/*",
           onFile: async (file, ctx) => {

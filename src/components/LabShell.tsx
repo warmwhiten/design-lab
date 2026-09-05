@@ -28,6 +28,10 @@ export type Ctl<S> =
     }
   /* 고르는 게 아니라 누를 때마다 실행되는 아이콘 버튼들 (예: 도형 넣기) */
   | { t: "iconbuttons"; options: { label: string; icon: string; run: (ctx: Ctx<S>) => void }[] }
+  | {
+      t: "vselect"; label: string; options: { value: string; label: string }[];
+      get: (s: S) => string; set: (v: string, ctx: Ctx<S>) => void;
+    }
   | { t: "vcolors"; items: { label: string; get: (s: S) => string; set: (v: string, ctx: Ctx<S>) => void }[] }
   | { t: "vtoggle"; label: string; get: (s: S) => boolean; set: (v: boolean, ctx: Ctx<S>) => void }
   | { t: "select"; k: keyof S & string; label?: string; options: { value: string; label: string }[] }
@@ -51,6 +55,8 @@ type Props<S extends Record<string, any>> = {
   actions: { label: string; primary?: boolean; run: (ctx: Ctx<S>) => void }[];
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   meta?: string;
+  /** 캔버스에 붙일 접근성 이름. 현재 상태를 담으면 보조기술에도 결과가 전달된다. */
+  canvasLabel?: string;
 };
 
 /* ---------- 상태 ↔ 쿼리스트링 ---------- */
@@ -86,7 +92,7 @@ function writeURL<S extends Record<string, any>>(state: S, defaults: S) {
 }
 
 export default function LabShell<S extends Record<string, any>>({
-  slug, title, tagline, defaults, state, onChange, groups, actions, canvasRef, meta
+  slug, title, tagline, defaults, state, onChange, groups, actions, canvasRef, meta, canvasLabel
 }: Props<S>) {
   const [msg, setMsg] = useState("");
   const [saved, setSaved] = useState<string | null>(null);
@@ -137,7 +143,7 @@ export default function LabShell<S extends Record<string, any>>({
       <header className="top">
         <Link className="brand" href="/"><span className="dot" />design-lab</Link>
         <div className="sep" />
-        <div className="lab-title">{title}</div>
+        <h1 className="lab-title">{title}</h1>
         <p className="lab-tag">{tagline}</p>
         <div className="top-tools">
           <select
@@ -154,7 +160,7 @@ export default function LabShell<S extends Record<string, any>>({
         </div>
       </header>
 
-      <div className="main">
+      <main className="main">
         <div className="rail">
           {groups.map((g) => (
             <section className="grp" key={g.label}>
@@ -165,7 +171,10 @@ export default function LabShell<S extends Record<string, any>>({
         </div>
 
         <div className="stage">
-          <div className="canvas-wrap"><canvas ref={canvasRef} /></div>
+          {/* 결과물 자체라 이름이 없으면 보조기술에는 빈 상자로 남는다 */}
+          <div className="canvas-wrap">
+            <canvas ref={canvasRef} role="img" aria-label={canvasLabel ?? `${title} 미리보기`} />
+          </div>
           <div className="bar">
             {actions.map((x) => (
               <button key={x.label} type="button" className={"btn" + (x.primary ? " pri" : "")}
@@ -181,7 +190,7 @@ export default function LabShell<S extends Record<string, any>>({
             </div>
           </div>
         </div>
-      </div>
+      </main>
 
       <div className={"toast" + (msg ? " on" : "")} role="status">{msg}</div>
     </div>
@@ -231,6 +240,17 @@ function Control<S extends Record<string, any>>({ c, ctx }: { c: Ctl<S>; ctx: Ct
         </div>
       );
     }
+
+    case "vselect":
+      return (
+        <>
+          <p className="hint">{c.label}</p>
+          <select className="sel" value={c.get(state)} aria-label={c.label}
+            onChange={(e) => c.set(e.target.value, ctx)}>
+            {c.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </>
+      );
 
     case "vcolors":
       return (
