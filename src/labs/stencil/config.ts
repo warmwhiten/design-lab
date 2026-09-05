@@ -29,7 +29,7 @@ export const DEFAULTS: StencilState = {
   gscale: 1,
   bleed: 0.45,
   fiber: 0.34,
-  dot: 0.012,
+  dot: 0.0032,
 
   c1: "#7E9AC6",
   c2: "#9EC7A6",
@@ -75,7 +75,7 @@ export const PRESETS: Record<string, Partial<StencilState>> = {
   "점묘 그라디언트": {
     mode: "fill", invert: false, soften: 0.3, clean: 0.3, lineW: 0.006,
     layout: "single", gap: 0.03, fill: 0.8, field: "linear", fangle: 60,
-    ink: "stipple", dot: 0.0105, grain: 0.4, bleed: 0.2, fiber: 0.28,
+    ink: "stipple", dot: 0.003, grain: 0.55, bleed: 0.2, fiber: 0.28,
     sparkle: 0, ratio: "1:1",
     c1: "#2F3C6E", c2: "#C4577B", c3: "#F0C46A", cPaper: "#FBF6EA"
   },

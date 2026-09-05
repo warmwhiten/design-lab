@@ -210,7 +210,9 @@ export function render(W: number, H: number, C: StencilState, mask: Mask | null)
   const gU = gf * U;                       // 캔버스 크기와 무관한 그레인 주파수
   const bf = (C.ink === "print" ? 34 : C.ink === "stipple" ? 17 : 8) / U;
   const bAmp = C.bleed * 0.032;
-  const dotSp = Math.max(2.2, U * C.dot);
+  /* 점 간격. 아래 클램프는 초안 해상도에서 점이 픽셀보다 작아져 뭉개지는 것만 막는다 —
+     너무 높이 잡으면 초안과 미리보기의 질감이 달라 보인다. */
+  const dotSp = Math.max(1.5, U * C.dot);
   const fieldRad = (C.fangle * Math.PI) / 180;
   const fcos = Math.cos(fieldRad), fsin = Math.sin(fieldRad);
   const diag = Math.abs(W * fcos) + Math.abs(H * fsin) || 1;
@@ -307,16 +309,21 @@ export function render(W: number, H: number, C: StencilState, mask: Mask | null)
              그레인을 반지름 계산 전에 먹여야 점이 실제로 작아진다. */
           const dens = clamp01(a * (1 - C.grain * 0.6 * (1 - fbm(nx * gU * 0.22, ny * gU * 0.22, seed + 11, 2))));
           const gx = Math.floor(x / dotSp), gy = Math.floor(y / dotSp);
-          const r = dotSp * 0.64 * Math.sqrt(dens);
+          /* 반지름을 간격의 절반 근처로 두면 점이 다 붙어 면이 되지 않고
+             사이로 종이가 비쳐 점묘다운 공기가 생긴다. */
+          const r = dotSp * 0.54 * Math.sqrt(dens);
           let cov = 0;
-          for (let j = -1; j <= 1; j++) {
+          dots: for (let j = -1; j <= 1; j++) {
             for (let i = -1; i <= 1; i++) {
               const ax = gx + i, ay = gy + j;
               const jx = (ax + 0.5 + (hash2(ax, ay, seed) - 0.5) * 0.86) * dotSp;
               const jy = (ay + 0.5 + (hash2(ax, ay, seed + 13) - 0.5) * 0.86) * dotSp;
               const d = Math.hypot(x - jx, y - jy);
-              const c = 1 - smooth(r * 0.72, r * 1.06 + 0.4, d);
-              if (c > cov) cov = c;
+              /* 원 경계의 픽셀 덮임을 그대로 근사한다 — 경계 폭이 반지름에 비례하면
+                 점이 2px 안팎으로 작아졌을 때 안티에일리어싱이 무너져 각진 덩어리가 된다.
+                 여기서는 반지름과 무관하게 항상 1.4px 폭이라 아무리 잘아도 부드럽다. */
+              const c = (r - d) * 0.72 + 0.5;
+              if (c > cov) { if (c >= 1) { cov = 1; break dots; } cov = c; }
             }
           }
           a = cov;

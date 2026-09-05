@@ -159,7 +159,7 @@ export default function Stencil() {
         { t: "range", k: "grain", label: "그레인", min: 0, max: 1, step: 0.02, fmt: f2 },
         { t: "range", k: "gscale", label: "그레인 크기", min: 0.3, max: 3, step: 0.05, fmt: f2 },
         { t: "range", k: "bleed", label: "번짐", min: 0, max: 1, step: 0.02, fmt: f2 },
-        { t: "range", k: "dot", label: "점 간격 (점묘)", min: 0.004, max: 0.035, step: 0.0005, fmt: (v) => v.toFixed(3) },
+        { t: "range", k: "dot", label: "점 간격 (점묘)", min: 0.0018, max: 0.02, step: 0.0002, fmt: (v) => v.toFixed(4) },
         { t: "range", k: "fiber", label: "종이 섬유", min: 0, max: 1, step: 0.02, fmt: f2 }
       ]
     },
