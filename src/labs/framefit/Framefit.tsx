@@ -139,7 +139,7 @@ export default function Framefit() {
           t: "buttons",
           items: [
             {
-              label: "랜덤 조합",
+              label: "무작위로 조합",
               run: (ctx) => {
                 const r = (a: number, b: number) => a + Math.random() * (b - a);
                 const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];

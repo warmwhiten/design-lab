@@ -509,6 +509,7 @@ export default function Woodcut() {
             items: [
               {
                 label: selKind === "shape" ? "이 도형 지우기" : "이 글자 되돌리기",
+                danger: selKind === "shape",
                 run: (ctx: Ctx<WoodcutState>) => {
                   if (!active) return;
                   if (active[0] === "s") {
@@ -571,7 +572,7 @@ export default function Woodcut() {
               }
             },
             {
-              label: "랜덤 조합",
+              label: "무작위로 조합",
               run: (ctx) => {
                 const r = (a: number, b: number) => a + Math.random() * (b - a);
                 const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];

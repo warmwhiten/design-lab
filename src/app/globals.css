@@ -4,10 +4,10 @@
    ============================================================= */
 :root{
   --paper:#E3E3DE; --panel:#FBFBF9; --panel-2:#F1F1ED;
-  --ink:#15161B; --ink-2:#5B5F6B; --ink-3:#8B8F99;
+  --ink:#15161B; --ink-2:#5B5F6B; --ink-3:#71747C;
   --rule:#CBCBC4; --rule-soft:#DFDFD8;
   --accent:#1B3ECC; --accent-ink:#fff; --accent-soft:#E1E6FB;
-  --mark:#D9930A;
+  --mark:#D9930A; --danger:#A32B22;
   --stage:#DCDCD6; --grid:#CFCFC8;
   --shadow:0 1px 0 rgba(21,22,27,.06), 0 8px 24px -18px rgba(21,22,27,.5);
   --mono:"DM Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
@@ -17,20 +17,20 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --paper:#101116; --panel:#191B21; --panel-2:#212430;
-    --ink:#ECEDF1; --ink-2:#9AA0AE; --ink-3:#6E7480;
+    --ink:#ECEDF1; --ink-2:#9AA0AE; --ink-3:#7D838D;
     --rule:#2E323C; --rule-soft:#24272F;
     --accent:#7B96FF; --accent-ink:#0D0F14; --accent-soft:#1D2440;
-    --mark:#E8B23C;
+    --mark:#E8B23C; --danger:#F0918A;
     --stage:#0A0B0E; --grid:#1B1D24;
     --shadow:0 1px 0 rgba(255,255,255,.03), 0 10px 30px -20px #000;
   }
 }
 :root[data-theme="dark"]{
   --paper:#101116; --panel:#191B21; --panel-2:#212430;
-  --ink:#ECEDF1; --ink-2:#9AA0AE; --ink-3:#6E7480;
+  --ink:#ECEDF1; --ink-2:#9AA0AE; --ink-3:#7D838D;
   --rule:#2E323C; --rule-soft:#24272F;
   --accent:#7B96FF; --accent-ink:#0D0F14; --accent-soft:#1D2440;
-  --mark:#E8B23C;
+  --mark:#E8B23C; --danger:#F0918A;
   --stage:#0A0B0E; --grid:#1B1D24;
   --shadow:0 1px 0 rgba(255,255,255,.03), 0 10px 30px -20px #000;
 }
@@ -66,13 +66,13 @@ a{color:inherit}
 .top .sep{width:1px;height:20px;background:var(--rule)}
 .lab-title{font-family:var(--display);font-weight:700;font-size:16px;letter-spacing:-.02em;margin:0}
 .lab-tag{color:var(--ink-2);font-size:12.5px;max-width:56ch;flex:1 1 240px;min-width:0}
-.top-tools{display:flex;gap:8px;align-items:center;margin-left:auto}
+.top-tools{display:flex;gap:8px;align-items:center;margin-inline-start:auto}
 
 /* ---------- 셸 레이아웃 ---------- */
 .shell{display:grid;grid-template-rows:auto 1fr;height:100dvh}
 .main{display:grid;grid-template-columns:minmax(280px,336px) 1fr;min-height:0}
 .rail{
-  border-right:1px solid var(--rule); background:var(--panel);
+  border-inline-end:1px solid var(--rule); background:var(--panel);
   overflow-y:auto; overscroll-behavior:contain; display:flex; flex-direction:column;
 }
 .grp{border-bottom:1px solid var(--rule-soft);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
@@ -129,6 +129,9 @@ label.tog input{accent-color:var(--accent);width:16px;height:16px;flex:none}
 .btn.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
 @media (hover:hover){.btn.pri:hover{filter:brightness(1.06)}}
 .btn.sm{padding:5px 9px;font-size:11.5px}
+/* 확인도 실행취소도 없는 동작 — 옆의 무해한 버튼과 구분되게 둔다 */
+.btn.danger{color:var(--danger);border-color:var(--danger)}
+@media (hover:hover){.btn.danger:hover{background:var(--danger);color:var(--paper)}}
 
 /* ---------- 스테이지 ---------- */
 .stage{
@@ -149,7 +152,7 @@ label.tog input{accent-color:var(--accent);width:16px;height:16px;flex:none}
   border-top:1px solid var(--rule);background:var(--panel);padding:10px 16px;
   display:flex;gap:10px;align-items:center;flex-wrap:wrap;
 }
-.meta{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-left:auto;font-variant-numeric:tabular-nums}
+.meta{font-family:var(--mono);font-size:11px;color:var(--ink-3);margin-inline-start:auto;font-variant-numeric:tabular-nums}
 .save-slot{
   border-top:1px solid var(--rule);background:var(--panel-2);padding:12px 16px;
   display:none;gap:12px;align-items:flex-start;
@@ -171,9 +174,11 @@ label.tog input{accent-color:var(--accent);width:16px;height:16px;flex:none}
 @media (max-width:900px){
   .shell{height:auto}
   .main{grid-template-columns:1fr}
-  .rail{border-right:none;border-top:1px solid var(--rule);order:2}
+  .rail{border-inline-end:none;border-top:1px solid var(--rule);order:2}
   .stage{order:1;position:sticky;top:0;z-index:2}
   .canvas-wrap{padding:14px;max-height:56dvh}
+  /* iOS Safari 는 16px 미만 입력에 포커스하면 페이지째 확대한다 */
+  textarea.ta,select.sel,input[type=file]{font-size:16px}
   .lab-tag{display:none}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
@@ -231,14 +236,14 @@ h1.page-t{
 .article{background:var(--paper);border-top:1px solid var(--rule);padding:52px 24px 72px}
 .article-in{max-width:66ch;margin:0 auto}
 .article h2{
-  font-family:var(--display);font-weight:700;font-size:24px;letter-spacing:-.02em;
+  font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:-.02em;
   margin:44px 0 12px;text-wrap:balance;
 }
 .article h2:first-child{margin-top:0}
 .article h3{font-family:var(--display);font-weight:700;font-size:17px;margin:28px 0 8px}
 .article p{margin:0 0 14px;line-height:1.75;color:var(--ink-2)}
 .article strong{color:var(--ink);font-weight:600}
-.article ul,.article ol{margin:0 0 16px;padding-left:20px;color:var(--ink-2);line-height:1.75}
+.article ul,.article ol{margin:0 0 16px;padding-inline-start:20px;color:var(--ink-2);line-height:1.75}
 .article li{margin-bottom:5px}
 .article code{font-family:var(--mono);font-size:12.5px;background:var(--panel-2);
   border:1px solid var(--rule-soft);border-radius:3px;padding:1px 5px;color:var(--ink)}
@@ -246,12 +251,17 @@ h1.page-t{
   padding:14px 16px;overflow-x:auto;margin:0 0 18px}
 .article pre code{background:none;border:none;padding:0;font-size:12px;line-height:1.6}
 .article a{color:var(--accent);text-underline-offset:3px}
-.article blockquote{margin:0 0 18px;padding:2px 0 2px 16px;border-left:3px solid var(--accent);
+.article blockquote{margin:0 0 18px;padding-block:2px;padding-inline:16px 0;border-inline-start:3px solid var(--accent);
   color:var(--ink-2)}
 .article hr{border:none;border-top:1px solid var(--rule-soft);margin:36px 0}
 .article-nav{max-width:66ch;margin:40px auto 0;display:flex;gap:12px;flex-wrap:wrap}
 
-/* 실험실 페이지: 셸을 꽉 채우지 않고 글이 아래로 이어지게 */
-.lab-page .shell{height:auto}
-.lab-page .main{height:calc(100dvh - 52px);min-height:520px}
-@media (max-width:900px){.lab-page .main{height:auto}}
+/* 실험실 페이지: 셸이 한 화면을 차지하고 글이 그 아래로 이어진다.
+   헤더 높이를 상수로 빼서 계산하면 상단 설명문이 줄바꿈될 때(넓은 화면에서도
+   생긴다) 그 차이만큼 하단 액션 바가 화면 밖으로 밀린다.
+   .shell 의 grid-template-rows(auto 1fr)가 남는 공간을 배분하게 둔다. */
+.lab-page .main{min-height:520px}
+@media (max-width:900px){
+  .lab-page .shell{height:auto}
+  .lab-page .main{height:auto}
+}

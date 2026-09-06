@@ -40,7 +40,8 @@ export type Ctl<S> =
   | { t: "chips"; presets: Record<string, Partial<S>> }
   | { t: "colors"; items: { k: keyof S & string; label: string }[] }
   | { t: "toggle"; k: keyof S & string; label: string }
-  | { t: "buttons"; items: { label: string; primary?: boolean; run: (ctx: Ctx<S>) => void }[] };
+  /* danger: 되돌릴 수 없는 동작 — 옆 버튼과 달라 보여야 한다 */
+  | { t: "buttons"; items: { label: string; primary?: boolean; danger?: boolean; run: (ctx: Ctx<S>) => void }[] };
 
 export type Group<S> = { label: string; controls: Ctl<S>[] };
 
@@ -361,7 +362,8 @@ function Control<S extends Record<string, any>>({ c, ctx }: { c: Ctl<S>; ctx: Ct
       return (
         <div className="row">
           {c.items.map((it) => (
-            <button key={it.label} type="button" className={"btn" + (it.primary ? " pri" : "")}
+            <button key={it.label} type="button"
+              className={"btn" + (it.primary ? " pri" : "") + (it.danger ? " danger" : "")}
               onClick={() => it.run(ctx)}>{it.label}</button>
           ))}
         </div>
