@@ -1,4 +1,21 @@
+import type { FontDef } from "@/lib/font";
 import type { StencilState } from "./engine";
+
+/* 레이아웃에 이미 실려 있는 Google Fonts 를 그대로 쓴다 — 추가 로딩 없음.
+   weight 는 캔버스 font 문자열에 그대로 들어간다. 빠뜨리면 800 짜리 폰트가
+   400 으로 요청돼 조용히 대체 폰트로 떨어진다. */
+export const FONTS: FontDef[] = [
+  { id: "bowlby", label: "Bowlby One", css: '"Bowlby One"', weight: 400 },
+  { id: "titan", label: "Titan One", css: '"Titan One"', weight: 400 },
+  { id: "alfa", label: "Alfa Slab One", css: '"Alfa Slab One"', weight: 400 },
+  { id: "anton", label: "Anton", css: '"Anton"', weight: 400 },
+  { id: "bungee", label: "Bungee", css: '"Bungee"', weight: 400 },
+  { id: "lilita", label: "Lilita One", css: '"Lilita One"', weight: 400 },
+  { id: "baloo", label: "Baloo 2", css: '"Baloo 2"', weight: 800 },
+  { id: "fredoka", label: "Fredoka", css: '"Fredoka"', weight: 700 },
+  { id: "blackhan", label: "Black Han Sans (한글)", css: '"Black Han Sans"', weight: 400 },
+  { id: "jua", label: "Jua (한글)", css: '"Jua"', weight: 400 }
+];
 
 /** 기본값 = 레퍼런스 1번(색연필 구름 + 별) 을 글씨로 재현한 상태.
  *  도구를 처음 열자마자 결과가 보이도록 사진 없이도 완성형이어야 한다. */

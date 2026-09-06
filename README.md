@@ -39,12 +39,20 @@ src/
     svg.ts                     마칭 스퀘어 → SVG
     config.ts                  기본값 · 프리셋
     Framefit.tsx               'use client' 캔버스 컴포넌트
+  labs/woodcut/
+    engine.ts                  조각도 · 잉크 · 손떨림 · 색판 분리
+    svg.ts                     판별 윤곽 → SVG
+    config.ts                  기본값 · 프리셋
+    Woodcut.tsx                'use client' 캔버스 컴포넌트 (캔버스 위 조작 핸들)
   labs/stencil/
     noise.ts                   순열 표 기반 노이즈 · fBm · 종이 섬유
     mask.ts                    사진/글씨 → 실루엣 (오츠 · 소벨 · 다수결 · 블러)
     engine.ts                  종이 · 잉크 필드 · 질감 합성 (DOM 무관)
     config.ts                  기본값 · 프리셋
     Stencil.tsx                'use client' 캔버스 컴포넌트
+  lib/
+    font.ts                    업로드 폰트 등록 (실험실 공용)
+    trace.ts                   마칭 스퀘어 윤곽 추적 → SVG 경로 (실험실 공용)
 public/og/                     OG 이미지
 .github/workflows/deploy.yml   Pages 배포
 ```
@@ -109,7 +117,16 @@ public/og/                     OG 이미지
 opentype.js 같은 의존성이 없고, 사용자가 업로드한 폰트도 그대로 동작한다.
 SVG 는 마칭 스퀘어 윤곽 추적 → 이동 평균 → RDP 단순화로 뽑는다.
 
-## 실험 2 — Stencil Print Lab
+## 실험 2 — Woodcut Type Lab
+
+평범한 폰트를 판화처럼 바꾼다. 글자·도형을 캔버스에서 끌어 배치하고 색마다 판을 따로 판다.
+자세한 원리는 `src/app/lab/woodcut/article.mdx`.
+
+요약하면, 판화가 판화로 보이는 건 폰트가 아니라 **표면** 때문이다 —
+조각도로는 직각을 팔 수 없고, 손은 직선을 못 긋고, 잉크는 번지거나 가장자리에 몰린다.
+그 과정에서 벌어지는 일들을 하나씩 흉내 낸다.
+
+## 실험 3 — Stencil Print Lab
 
 사진이나 글씨에서 실루엣·윤곽선을 따고, 뚫린 자리 뒤를 색연필 · 점묘 · 판화 질감으로 채운다.
 자세한 원리는 `src/app/lab/stencil/article.mdx`.

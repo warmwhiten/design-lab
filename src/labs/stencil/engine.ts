@@ -53,21 +53,6 @@ export type StencilState = {
   seed: number;
 };
 
-export type FontDef = { id: string; label: string; css: string };
-
-/* 레이아웃에 이미 실려 있는 Google Fonts 를 그대로 쓴다 — 추가 로딩 없음. */
-export const FONTS: FontDef[] = [
-  { id: "bowlby", label: "Bowlby One", css: '"Bowlby One"' },
-  { id: "titan", label: "Titan One", css: '"Titan One"' },
-  { id: "alfa", label: "Alfa Slab One", css: '"Alfa Slab One"' },
-  { id: "bungee", label: "Bungee", css: '"Bungee"' },
-  { id: "lilita", label: "Lilita One", css: '"Lilita One"' },
-  { id: "baloo", label: "Baloo 2", css: '"Baloo 2"' },
-  { id: "fredoka", label: "Fredoka", css: '"Fredoka"' },
-  { id: "blackhan", label: "Black Han Sans (한글)", css: '"Black Han Sans"' },
-  { id: "jua", label: "Jua (한글)", css: '"Jua"' }
-];
-
 export const RATIOS: Record<Ratio, number> = { "1:1": 1, "4:5": 0.8, "3:4": 0.75 };
 
 export const INK_OPTS: { value: InkKind; label: string; icon: string }[] = [

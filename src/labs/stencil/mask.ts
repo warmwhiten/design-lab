@@ -212,7 +212,7 @@ function grayOf(cv: HTMLCanvasElement, useAlpha: boolean): Float32Array {
 
 /** 글씨 → 마스크. 캔버스에 그린 글자의 알파가 이미 완벽한 이진 실루엣이라
  *  사진 파이프라인의 마지막 단계에 그대로 꽂으면 된다. */
-export function textMask(text: string, fontCss: string, aspect: number, o: MaskOpts, long = MASK_LONG): Mask {
+export function textMask(text: string, font: { css: string; weight: number }, aspect: number, o: MaskOpts, long = MASK_LONG): Mask {
   const { w, h } = maskSize(aspect, long);
   const cv = scratch(w, h);
   const ctx = cv.getContext("2d", { willReadFrequently: true })!;
@@ -220,7 +220,8 @@ export function textMask(text: string, fontCss: string, aspect: number, o: MaskO
   if (!lines.length) return { w, h, a: new Uint8Array(w * h) };
 
   const probe = 100;
-  ctx.font = `${probe}px ${fontCss}`;
+  const face = `${font.weight} %SIZE%px ${font.css}, system-ui, sans-serif`;
+  ctx.font = face.replace("%SIZE%", String(probe));
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   let maxW = 1;
@@ -229,7 +230,7 @@ export function textMask(text: string, fontCss: string, aspect: number, o: MaskO
   const blockH = probe * lead * lines.length;
   const size = Math.min((w * 0.98) / maxW, (h * 0.98) / blockH) * probe;
 
-  ctx.font = `${size}px ${fontCss}`;
+  ctx.font = face.replace("%SIZE%", String(size));
   ctx.fillStyle = "#fff";
   const step = size * lead;
   const top = h / 2 - (step * (lines.length - 1)) / 2;

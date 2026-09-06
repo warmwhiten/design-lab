@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LabShell, { readURL, type Ctx, type Group } from "@/components/LabShell";
+import { findFont, loadFont } from "@/lib/font";
 import {
-  CELL_OPTS, FIELD_OPTS, FONTS, INK_OPTS, RATIOS,
+  CELL_OPTS, FIELD_OPTS, INK_OPTS, RATIOS,
   compose, makeCanvas, sizeFor, type StencilState
 } from "./engine";
 import { MASK_LONG, photoMask, textMask, type Mask } from "./mask";
-import { DEFAULTS, DRAFT, PRESETS, PREVIEW } from "./config";
+import { DEFAULTS, DRAFT, FONTS, PRESETS, PREVIEW } from "./config";
 
 const f2 = (v: number) => v.toFixed(2);
 const pct = (v: number) => Math.round(v * 100) + "%";
@@ -32,6 +33,7 @@ export default function Stencil() {
   const draftRef = useRef(false);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const [imgVer, setImgVer] = useState(0);
+  const [fontTick, setFontTick] = useState(0);
 
   /* 링크로 들어온 조합을 복원 */
   useEffect(() => { setState((s) => ({ ...s, ...readURL(DEFAULTS) })); }, []);
@@ -50,11 +52,10 @@ export default function Stencil() {
     };
     const img = imgRef.current;
     if (C.src === "photo" && img) return photoMask(img, img.naturalWidth, img.naturalHeight, aspect, o, long);
-    const font = FONTS.find((f) => f.id === C.font) ?? FONTS[0];
-    return textMask(C.text, font.css, aspect, o, long);
+    return textMask(C.text, findFont(C.font, FONTS), aspect, o, long);
   }, []);
 
-  const key = maskKey(state, imgVer);
+  const key = maskKey(state, imgVer) + "|" + fontTick;
   useEffect(() => {
     /* 슬라이더를 잡고 있는 동안은 저해상도 마스크로 따라가고, 놓으면 제대로 다시 뽑는다 */
     const long = draftRef.current ? 640 : MASK_LONG;
@@ -63,12 +64,17 @@ export default function Stencil() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, buildMask]);
 
-  /* 웹폰트가 실제로 준비된 뒤 한 번 더 — 첫 화면이 대체 폰트로 굳는 걸 막는다 */
+  /* 마스크는 화면에 붙지 않은 캔버스에 그린다. 그래서 브라우저가 이 웹폰트를
+     "필요하다" 고 판단할 계기가 없어, 가만히 두면 영원히 대체 폰트로 그려진다.
+     쓸 글자를 지정해 명시적으로 받아온 뒤 마스크를 다시 뽑는다. */
   useEffect(() => {
     let alive = true;
-    document.fonts.ready.then(() => { if (alive) setState((s) => ({ ...s })); }).catch(() => {});
+    loadFont(findFont(state.font, FONTS), state.text)
+      .then(() => document.fonts.ready)
+      .then(() => { if (alive) setFontTick((t) => t + 1); })
+      .catch(() => {});
     return () => { alive = false; };
-  }, []);
+  }, [state.font, state.text]);
 
   /* ---------- 합성 ---------- */
   useEffect(() => {
