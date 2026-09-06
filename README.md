@@ -78,6 +78,7 @@ public/og/                     OG 이미지
 ```
 
 컨트롤 타입: `textarea` `range` `select` `file` `icons` `chips` `colors` `toggle` `buttons`
+(상태 키에 바로 묶이지 않는 값은 `vrange` `vselect` `vcolors` `vtoggle` `iconbuttons`)
 
 셸이 대신 해주는 것
 
@@ -144,6 +145,25 @@ SVG 는 마칭 스퀘어 윤곽 추적 → 이동 평균 → RDP 단순화로 �
 
 `engine.ts` 의 `render()` 는 DOM 을 전혀 건드리지 않는다 (`compose()` 가 캔버스 껍데기).
 `public/og/stencil.png` 도 이 함수를 Node 에서 그대로 돌려 뽑았다.
+
+## 실험 4 — Dither Studio
+
+사진의 색을 몇 개로 줄이고, 잃어버린 계조를 점의 밀도로 되돌린다.
+원리는 `src/app/lab/dither/article.mdx`.
+
+알고리즘 열여덟 가지가 **같은 루프 하나**로 돈다. 다른 것은 기준값을 어디서 얻느냐뿐이다 —
+오차 확산(Floyd–Steinberg · Atkinson · Jarvis · Stucki …)은 반올림하며 버린 차이를 이웃에게
+넘기고, 정렬 디더(Bayer · 망점 · 가로줄 · 블루 노이즈)는 미리 만든 매트릭스에서 읽는다.
+블루 노이즈 64×64 는 Ulichney 의 void-and-cluster 로 첫 사용 때 만들어 캐시한다.
+
+두 가지를 지킨다.
+
+- **격자는 화면 크기와 무관하다.** 늘 긴 변 1000 기준으로 잡고, 화면·내보내기는 정수배로
+  늘리기만 한다 (보간 없이). 안 그러면 드래그 중 초안 해상도에서 그림이 통째로 달라진다.
+- **비교는 늘어놓지 않고 잘라 붙인다.** 사진 한 장을 칸으로 잘라 칸마다 다르게 찍어야
+  같은 자리의 같은 계조를 견주게 된다.
+
+사진은 링크에 실리지 않는다(설정만). 기본 상태는 브라우저에서 그리는 견본 시험지로 열린다.
 
 ## 라이선스
 

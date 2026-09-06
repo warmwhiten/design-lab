@@ -73,12 +73,17 @@ export const LABS: Lab[] = [
   {
     slug: "dither",
     title: "Dither Studio",
-    tagline: "같은 사진을 Floyd–Steinberg / Bayer / Atkinson으로 나란히 놓고 비교한다.",
-    description: "같은 이미지에 디더링 알고리즘 세 가지를 동시에 적용해 질감 차이를 나란히 비교하는 도구.",
-    keywords: ["디더링", "Floyd-Steinberg", "Bayer 디더", "Atkinson 디더", "픽셀 아트 변환"],
-    tags: ["이미지", "알고리즘"],
-    status: "soon",
-    mark: '<g fill="currentColor"><rect x="8" y="8" width="6" height="6"/><rect x="20" y="8" width="6" height="6"/><rect x="14" y="14" width="6" height="6"/><rect x="26" y="14" width="6" height="6"/><rect x="8" y="20" width="6" height="6"/><rect x="32" y="20" width="6" height="6"/><rect x="20" y="26" width="6" height="6"/><rect x="38" y="8" width="6" height="6"/><rect x="44" y="26" width="6" height="6"/><rect x="14" y="38" width="6" height="6"/><rect x="32" y="44" width="6" height="6"/><rect x="50" y="44" width="6" height="6"/></g>'
+    tagline: "사진의 색을 몇 개로 줄이고 잃어버린 계조를 점으로 되돌린다. 알고리즘을 나란히 놓고 비교한다.",
+    description:
+      "사진을 흑백 1비트·게임보이·리소·앰버 터미널 같은 제한된 색으로 바꾸는 무료 디더링 도구. Floyd–Steinberg·Atkinson·Jarvis·Stucki 같은 오차 확산과 Bayer·망점·블루 노이즈 같은 정렬 디더 열여덟 가지를 점 크기·세기·대비와 함께 실시간으로 조작합니다. 한 장을 칸으로 잘라 알고리즘을 나란히 비교하고, 색마다 판이 나뉜 SVG와 격자 그대로의 PNG로 내보냅니다.",
+    keywords: [
+      "디더링", "디더링 변환", "Floyd-Steinberg", "Bayer 디더", "Atkinson 디더", "블루 노이즈",
+      "픽셀 아트 변환", "1비트 이미지", "흑백 변환", "망점 만들기", "리소 인쇄 효과",
+      "게임보이 필터", "레트로 이미지 효과", "dither generator", "image dithering tool", "1-bit converter"
+    ],
+    tags: ["이미지", "알고리즘", "인쇄"],
+    status: "live",
+    mark: '<path fill="currentColor" d="M0 0h8v8h-8zM8 0h8v8h-8zM16 0h8v8h-8zM32 0h8v8h-8zM48 0h8v8h-8zM0 8h8v8h-8zM8 8h8v8h-8zM24 8h8v8h-8zM40 8h8v8h-8zM0 16h8v8h-8zM8 16h8v8h-8zM16 16h8v8h-8zM32 16h8v8h-8zM48 16h8v8h-8zM8 24h8v8h-8zM24 24h8v8h-8zM0 32h8v8h-8zM8 32h8v8h-8zM16 32h8v8h-8zM32 32h8v8h-8zM48 32h8v8h-8zM0 40h8v8h-8zM8 40h8v8h-8zM24 40h8v8h-8zM40 40h8v8h-8zM0 48h8v8h-8zM8 48h8v8h-8zM16 48h8v8h-8zM32 48h8v8h-8zM48 48h8v8h-8zM8 56h8v8h-8zM24 56h8v8h-8z"/>'
   },
   {
     slug: "contrast",
