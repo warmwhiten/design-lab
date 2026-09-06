@@ -4,12 +4,23 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LabShell, { readURL, type Ctx, type Group } from "@/components/LabShell";
 import { loadFont, registerUserFont, type FontDef } from "@/lib/font";
 import {
-  compose, FONTS as BASE_FONTS, layoutGlyphs, makeCanvas, NO_NUDGE, parseNudges, parseShapes,
-  pickItem, serializeNudges, serializeShapes, SHAPES, TOOLS,
-  type Nudge, type Shape, type WoodcutState
+  compose, FONTS as BASE_FONTS, handlePoints, layoutGlyphs, makeCanvas, NO_NUDGE,
+  parseNudges, parseShapes, pickItem, serializeNudges, serializeShapes, SHAPES, TOOLS,
+  toLocalDelta, type HandleId, type Nudge, type Shape, type WoodcutState
 } from "./engine";
 import { toSVG } from "./svg";
 import { DEFAULTS, DRAFT, PRESETS, PREVIEW } from "./config";
+
+/* 핸들의 로컬 방향과 커서 — 엔진의 HANDLE_DIR 과 짝을 이룬다 */
+const HANDLE_DIR_UI: Record<HandleId, [number, number]> = {
+  nw: [-1, -1], n: [0, -1], ne: [1, -1], e: [1, 0],
+  se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0]
+};
+const CURSOR: Record<HandleId, string> = {
+  nw: "nwse-resize", se: "nwse-resize", ne: "nesw-resize", sw: "nesw-resize",
+  n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize"
+};
+const clampDeg = (v: number) => Math.max(-70, Math.min(70, v));
 
 const f2 = (v: number) => v.toFixed(2);
 const f3 = (v: number) => v.toFixed(3);
@@ -29,11 +40,22 @@ export default function Woodcut() {
   const rafRef = useRef<number | null>(null);
   const userFontCount = useRef(0);
   const [active, setActive] = useState<string | null>(null);
-  const dragRef = useRef<
-    { id: string; x: number; y: number; dx: number; dy: number; rot: number; alt: boolean } | null
-  >(null);
+  const [skewMode, setSkewMode] = useState(false);
+  type Drag = {
+    id: string;
+    mode: "move" | "rotate" | HandleId;
+    x: number; y: number;          // 잡은 지점 (천분율)
+    start: Sel;                    // 잡은 순간의 값
+    w0: number; h0: number;        // 잡은 순간의 상자 크기
+    rot0: number;                  // 회전(라디안)
+  };
+  const dragRef = useRef<Drag | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const activeRef = useRef<string | null>(null);
+  activeRef.current = active;
+  const skewRef = useRef(false);
+  skewRef.current = skewMode;
 
   useEffect(() => { setState((s) => ({ ...s, ...readURL(DEFAULTS) })); }, []);
 
@@ -62,21 +84,24 @@ export default function Woodcut() {
      맞춰 두어서, 슬라이더와 드래그가 종류를 가리지 않고 같은 코드로 돌아간다. */
   const selKind = active ? (active[0] === "g" ? "glyph" : "shape") : null;
 
-  const readSel = useCallback((s: WoodcutState, id: string | null) => {
+  type Sel = {
+    x: number; y: number; rot: number;
+    size: number; sizeY: number; skew: number; skewY: number;
+  };
+
+  const readSel = useCallback((s: WoodcutState, id: string | null): Sel | null => {
     if (!id) return null;
     if (id[0] === "g") {
       const n = parseNudges(s.nudge).get(Number(id.slice(1))) ?? NO_NUDGE;
-      return { x: n.dx, y: n.dy, rot: n.rot, size: n.sc, skew: n.sk };
+      return { x: n.dx, y: n.dy, rot: n.rot, size: n.sc, sizeY: n.scy, skew: n.sk, skewY: n.sky };
     }
     const h = parseShapes(s.shapes)[Number(id.slice(1))];
-    return h ? { x: h.x, y: h.y, rot: h.rot, size: h.s, skew: h.skew } : null;
+    return h
+      ? { x: h.x, y: h.y, rot: h.rot, size: h.s, sizeY: h.sy, skew: h.skew, skewY: h.skewY }
+      : null;
   }, []);
 
-  const writeSel = useCallback((
-    id: string | null,
-    patch: Partial<{ x: number; y: number; rot: number; size: number; skew: number }>,
-    draft: boolean
-  ) => {
+  const writeSel = useCallback((id: string | null, patch: Partial<Sel>, draft: boolean) => {
     if (!id) return;
     const s = stateRef.current;
     if (id[0] === "g") {
@@ -85,7 +110,8 @@ export default function Woodcut() {
       const cur: Nudge = map.get(i) ?? { ...NO_NUDGE };
       map.set(i, {
         dx: patch.x ?? cur.dx, dy: patch.y ?? cur.dy, rot: patch.rot ?? cur.rot,
-        sc: patch.size ?? cur.sc, sk: patch.skew ?? cur.sk
+        sc: patch.size ?? cur.sc, sk: patch.skew ?? cur.sk,
+        scy: patch.sizeY ?? cur.scy, sky: patch.skewY ?? cur.sky
       });
       onChange({ nudge: serializeNudges(map) }, draft);
     } else {
@@ -96,7 +122,8 @@ export default function Woodcut() {
       list[i] = {
         ...cur,
         x: patch.x ?? cur.x, y: patch.y ?? cur.y, rot: patch.rot ?? cur.rot,
-        s: patch.size ?? cur.s, skew: patch.skew ?? cur.skew
+        s: patch.size ?? cur.s, skew: patch.skew ?? cur.skew,
+        sy: patch.sizeY ?? cur.sy, skewY: patch.skewY ?? cur.skewY
       };
       onChange({ shapes: serializeShapes(list) }, draft);
     }
@@ -116,46 +143,128 @@ export default function Woodcut() {
       const r = cv.getBoundingClientRect();
       return { x: ((e.clientX - r.left) / r.width) * 1000, y: ((e.clientY - r.top) / r.height) * 1000 };
     };
-    /** 천분율 좌표로 항목을 집는다 */
-    const pickAt = (p: { x: number; y: number }) => {
+    const layoutNow = () => {
       const probe = document.createElement("canvas");
       probe.width = probe.height = 8;
       const pg = probe.getContext("2d") as CanvasRenderingContext2D;
-      const items = layoutGlyphs(pg, 1000, stateRef.current, fonts).items;
-      return pickItem(items, p.x, p.y);
+      return layoutGlyphs(pg, 1000, stateRef.current, fonts).items;
+    };
+
+    /* 핸들은 화면에서 24px 는 잡혀야 한다. 캔버스는 축소돼 표시되므로
+       화면 픽셀을 천분율로 환산해서 판정 반경을 잡는다. */
+    const handleRadius = () => {
+      const w = cv.getBoundingClientRect().width || 1;
+      return Math.max(14, (24 / 2 / w) * 1000);
+    };
+
+    const findHandle = (p: { x: number; y: number }, items: ReturnType<typeof layoutNow>) => {
+      const id = activeRef.current;
+      if (!id) return null;
+      const it = items.find((i) => i.id === id);
+      if (!it) return null;
+      const r = handleRadius();
+      let best: { id: HandleId; d: number } | null = null;
+      for (const q of handlePoints(it)) {
+        const d = Math.hypot(q.x - p.x, q.y - p.y);
+        if (d <= r && (!best || d < best.d)) best = { id: q.id, d };
+      }
+      return best ? { item: it, handle: best.id } : null;
+    };
+
+    const begin = (id: string, mode: Drag["mode"], p: { x: number; y: number },
+      it: { w: number; h: number; rot: number }) => {
+      const s = readSel(stateRef.current, id);
+      if (!s) return false;
+      dragRef.current = { id, mode, x: p.x, y: p.y, start: s, w0: it.w, h0: it.h, rot0: it.rot };
+      return true;
+    };
+
+    /* 포인터가 이미 놓인 뒤라면 캡처는 던진다. 잡지 못해도 드래그 자체는
+       계속돼야 하므로 삼킨다(해제 쪽과 같은 이유). */
+    const capture = (e: PointerEvent) => {
+      try { cv.setPointerCapture(e.pointerId); } catch { /* noop */ }
     };
 
     const down = (e: PointerEvent) => {
       const p = toNorm(e);
-      const hit = pickAt(p);
+      const items = layoutNow();
+
+      /* 핸들이 항목보다 먼저다 — 겹칠 때 조작이 우선 */
+      const h = findHandle(p, items);
+      if (h) {
+        if (begin(h.item.id, h.handle, p, h.item)) {
+          capture(e);
+          e.preventDefault();
+        }
+        return;
+      }
+
+      const hit = pickItem(items, p.x, p.y);
       if (!hit) { setActive(null); return; }
-      const cur = readSel(stateRef.current, hit.id);
-      if (!cur) return;
-      dragRef.current = {
-        id: hit.id, x: p.x, y: p.y,
-        dx: cur.x, dy: cur.y, rot: cur.rot, alt: e.altKey || e.shiftKey
-      };
-      setActive(hit.id);
-      cv.setPointerCapture(e.pointerId);
-      e.preventDefault();
+      const mode: Drag["mode"] = (e.altKey || e.shiftKey) ? "rotate" : "move";
+      if (begin(hit.id, mode, p, hit)) {
+        setActive(hit.id);
+        capture(e);
+        e.preventDefault();
+      }
     };
 
     const move = (e: PointerEvent) => {
       const p = toNorm(e);
       const d = dragRef.current;
       if (!d) {
-        cv.style.cursor = pickAt(p) ? "grab" : "default";
+        const items = layoutNow();
+        const h = findHandle(p, items);
+        cv.style.cursor = h ? CURSOR[h.handle] : (pickItem(items, p.x, p.y) ? "grab" : "default");
         return;
       }
-      /* 보조키는 누른 순간이 아니라 끄는 동안 매번 본다.
-         끌다가 중간에 눌러도 회전으로 넘어가고, 떼면 다시 이동이다.
-         둘 다 드래그 시작점에서 계산하므로 오가도 값이 튀지 않는다. */
-      if (e.altKey || e.shiftKey || d.alt) {
-        writeSel(d.id, { x: d.dx, y: d.dy, rot: d.rot + (p.x - d.x) * 0.24 }, true);
-      } else {
-        writeSel(d.id, { x: d.dx + (p.x - d.x), y: d.dy + (p.y - d.y), rot: d.rot }, true);
+      const gx = p.x - d.x, gy = p.y - d.y;
+
+      /* 본체 드래그: 보조키를 끄는 동안 매번 봐서 도중에 회전으로 넘어갈 수 있다 */
+      if (d.mode === "move" || d.mode === "rotate") {
+        if (e.altKey || e.shiftKey || d.mode === "rotate") {
+          writeSel(d.id, { rot: d.start.rot + gx * 0.24 }, true);
+        } else {
+          writeSel(d.id, { x: d.start.x + gx, y: d.start.y + gy }, true);
+        }
+        cv.style.cursor = "grabbing";
+        return;
       }
-      cv.style.cursor = "grabbing";
+
+      /* 핸들 드래그 — 화면 이동량을 항목의 로컬 축으로 되돌려 계산한다 */
+      const L = toLocalDelta(d.rot0, gx, gy);
+      const dir = HANDLE_DIR_UI[d.mode];
+      const hw0 = d.w0 / 2, hh0 = d.h0 / 2;
+      const corner = d.mode.length === 2;
+
+      if (skewRef.current && !corner) {
+        /* 기울이기: 위·아래 변을 가로로 끌면 가로 기울기, 좌·우 변을 세로로 끌면 세로 기울기 */
+        if (dir[1] !== 0) {
+          const k = (Math.atan2(dir[1] * L.x, hh0) * 180) / Math.PI;
+          writeSel(d.id, { skew: clampDeg(d.start.skew + k) }, true);
+        } else {
+          const k = (Math.atan2(dir[0] * L.y, hw0) * 180) / Math.PI;
+          writeSel(d.id, { skewY: clampDeg(d.start.skewY + k) }, true);
+        }
+        return;
+      }
+
+      /* 크기: 반대쪽 변을 고정한 채 늘린다 */
+      let rw = 1, rh = 1;
+      if (dir[0] !== 0) rw = Math.max(0.08, (d.w0 + dir[0] * L.x) / d.w0);
+      if (dir[1] !== 0) rh = Math.max(0.08, (d.h0 + dir[1] * L.y) / d.h0);
+      if (corner) { const k = (rw + rh) / 2; rw = k; rh = k; } // 모서리는 비율 유지
+
+      /* 고정한 쪽이 제자리에 남도록 중심을 절반만큼 민다 */
+      const shiftX = (dir[0] * (rw - 1) * hw0);
+      const shiftY = (dir[1] * (rh - 1) * hh0);
+      const cos = Math.cos(d.rot0), sin = Math.sin(d.rot0);
+      writeSel(d.id, {
+        size: Math.max(4, d.start.size * rw),
+        sizeY: Math.max(8, (d.start.sizeY * rh) / rw),
+        x: d.start.x + shiftX * cos - shiftY * sin,
+        y: d.start.y + shiftX * sin + shiftY * cos
+      }, true);
     };
 
     const up = (e: PointerEvent) => {
@@ -226,7 +335,7 @@ export default function Woodcut() {
     const off = (list.length % 5) * 26;
     list.push({
       kind, x: 500 + off, y: 500 + off, s: 200, rot: 0, skew: 0,
-      fill: ctx.state.cInk, stroke: null, sw: 0
+      fill: ctx.state.cInk, stroke: null, sw: 0, sy: 100, skewY: 0
     });
     onChange({ shapes: serializeShapes(list) }, false);
     setActive(`s${list.length - 1}`);
@@ -266,6 +375,11 @@ export default function Woodcut() {
           options: [{ value: "", label: "선택 안 함" }, ...itemList],
           get: () => active ?? "",
           set: (v) => setActive(v || null)
+        },
+        {
+          t: "vtoggle", label: "기울이기 도구 (변 핸들이 기울임으로 바뀝니다)",
+          get: () => skewMode,
+          set: (v) => setSkewMode(v)
         },
         /* 도형은 절대 좌표, 글자는 자동 배치에서의 이동량이라 범위가 다르다 */
         ...(active ? [
@@ -310,9 +424,21 @@ export default function Woodcut() {
             fmt: (v: number) => (selKind === "shape" ? (v / 10).toFixed(0) + "%" : v.toFixed(0) + "%")
           },
           {
-            t: "vrange" as const, label: "기울기", min: -50, max: 50, step: 1,
+            t: "vrange" as const, label: "세로 크기", min: 20, max: 400, step: 1,
+            get: (s: WoodcutState) => readSel(s, active)?.sizeY ?? 100,
+            set: (v: number) => writeSel(active, { sizeY: v }, true),
+            fmt: (v: number) => v.toFixed(0) + "%"
+          },
+          {
+            t: "vrange" as const, label: "가로 기울기", min: -70, max: 70, step: 1,
             get: (s: WoodcutState) => readSel(s, active)?.skew ?? 0,
             set: (v: number) => writeSel(active, { skew: v }, true),
+            fmt: (v: number) => v.toFixed(0) + "°"
+          },
+          {
+            t: "vrange" as const, label: "세로 기울기", min: -70, max: 70, step: 1,
+            get: (s: WoodcutState) => readSel(s, active)?.skewY ?? 0,
+            set: (v: number) => writeSel(active, { skewY: v }, true),
             fmt: (v: number) => v.toFixed(0) + "°"
           },
           {
@@ -443,7 +569,7 @@ export default function Woodcut() {
         }
       ]
     }
-  ], [fonts, active, selKind, itemList, addShape, patchShape, readSel, writeSel, onChange]);
+  ], [fonts, active, selKind, skewMode, itemList, addShape, patchShape, readSel, writeSel, onChange]);
 
   return (
     <LabShell<WoodcutState>

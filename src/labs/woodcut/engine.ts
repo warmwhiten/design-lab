@@ -169,9 +169,14 @@ export function makeCanvas(S: number) { return mk(S, S); }
    보정값은 그 위에 따라다닌다.
    저장 형식: "인덱스:dx,dy,회전" 을 세미콜론으로. 건드린 글자만 담는다.
    dx·dy 는 캔버스 크기 대비 천분율, 회전은 도(°). */
-export type Nudge = { dx: number; dy: number; rot: number; sc: number; sk: number };
+/** sc 는 전체 크기(%), scy 는 거기에 곱해지는 세로 배율(%).
+ *  세로를 따로 두지 않고 곱셈으로 쌓아야 예전 링크(sc 만 있던 것)가
+ *  균일 확대 그대로 열린다. sk/sky 는 가로/세로 기울기(°). */
+export type Nudge = {
+  dx: number; dy: number; rot: number; sc: number; sk: number; scy: number; sky: number;
+};
 
-export const NO_NUDGE: Nudge = { dx: 0, dy: 0, rot: 0, sc: 100, sk: 0 };
+export const NO_NUDGE: Nudge = { dx: 0, dy: 0, rot: 0, sc: 100, sk: 0, scy: 100, sky: 0 };
 
 export function parseNudges(s: string): Map<number, Nudge> {
   const out = new Map<number, Nudge>();
@@ -186,21 +191,25 @@ export function parseNudges(s: string): Map<number, Nudge> {
     out.set(idx, {
       dx: v[0] || 0, dy: v[1] || 0, rot: v[2] || 0,
       sc: Number.isFinite(v[3]) ? v[3] : 100,
-      sk: v[4] || 0
+      sk: v[4] || 0,
+      scy: Number.isFinite(v[5]) ? v[5] : 100,
+      sky: v[6] || 0
     });
   }
   return out;
 }
 
-const isPlain = (n: Nudge) => !n.dx && !n.dy && !n.rot && !n.sk && n.sc === 100;
+const isPlain = (n: Nudge) =>
+  !n.dx && !n.dy && !n.rot && !n.sk && !n.sky && n.sc === 100 && n.scy === 100;
 
 export function serializeNudges(m: Map<number, Nudge>): string {
   const parts: string[] = [];
   for (const [i, n] of [...m.entries()].sort((a, b) => a[0] - b[0])) {
     if (isPlain(n)) continue;
-    parts.push(
-      `${i}:${Math.round(n.dx)},${Math.round(n.dy)},${Math.round(n.rot)},${Math.round(n.sc)},${Math.round(n.sk)}`
-    );
+    const f = [n.dx, n.dy, n.rot, n.sc, n.sk, n.scy, n.sky].map((v) => Math.round(v));
+    /* 세로 배율·세로 기울기가 기본값이면 뒤를 잘라 주소를 짧게 유지한다 */
+    while (f.length > 5 && f[f.length - 1] === (f.length === 6 ? 100 : 0)) f.pop();
+    parts.push(`${i}:${f.join(",")}`);
   }
   return parts.join(";");
 }
@@ -214,6 +223,8 @@ export type ShapeKind =
 export type Shape = {
   kind: ShapeKind; x: number; y: number; s: number; rot: number; skew: number;
   fill: string | null; stroke: string | null; sw: number;
+  /** s 에 곱해지는 세로 배율(%) 과 세로 기울기(°) */
+  sy: number; skewY: number;
 };
 
 export const SHAPES: { kind: ShapeKind; label: string; icon: string }[] = [
@@ -242,7 +253,8 @@ export function parseShapes(s: string): Shape[] {
     out.push({
       kind: kind as ShapeKind,
       x: num(0, 500), y: num(1, 500), s: num(2, 150), rot: num(3, 0), skew: num(4, 0),
-      fill: colIn(v[5]), stroke: colIn(v[6]), sw: num(7, 0)
+      fill: colIn(v[5]), stroke: colIn(v[6]), sw: num(7, 0),
+      sy: num(8, 100), skewY: num(9, 0)
     });
   }
   return out;
@@ -250,8 +262,14 @@ export function parseShapes(s: string): Shape[] {
 
 export function serializeShapes(list: Shape[]): string {
   return list
-    .map((h) => `${h.kind}:${Math.round(h.x)},${Math.round(h.y)},${Math.round(h.s)},` +
-      `${Math.round(h.rot)},${Math.round(h.skew)},${colOut(h.fill)},${colOut(h.stroke)},${Math.round(h.sw)}`)
+    .map((h) => {
+      const head = `${h.kind}:${Math.round(h.x)},${Math.round(h.y)},${Math.round(h.s)},` +
+        `${Math.round(h.rot)},${Math.round(h.skew)},${colOut(h.fill)},${colOut(h.stroke)},${Math.round(h.sw)}`;
+      /* 세로 배율·세로 기울기가 기본값이면 붙이지 않는다 */
+      if (Math.round(h.sy) === 100 && !Math.round(h.skewY)) return head;
+      if (!Math.round(h.skewY)) return `${head},${Math.round(h.sy)}`;
+      return `${head},${Math.round(h.sy)},${Math.round(h.skewY)}`;
+    })
     .join(";");
 }
 
@@ -313,7 +331,9 @@ export type Item = {
   bx: number; by: number;   // 찍는 기준점 (글자는 가로 중앙·베이스라인, 도형은 중심)
   cx: number; cy: number;   // 집기 판정용 중심
   w: number; h: number;
-  rot: number; scale: number; skew: number; size: number;
+  rot: number; size: number;
+  sx: number; sy: number;   // 축별 배율
+  skew: number; skewY: number; // 축별 기울기(라디안)
   fill: string | null; stroke: string | null; sw: number;
 };
 
@@ -326,9 +346,10 @@ function shapeItems(C: WoodcutState, S: number): Item[] {
       id: `s${i}`, kind: "shape" as const, ch: h.kind,
       bx: (h.x / 1000) * S, by: (h.y / 1000) * S,
       cx: (h.x / 1000) * S, cy: (h.y / 1000) * S,
-      w: r * 2, h: r * 2,
-      rot: (h.rot * Math.PI) / 180, scale: 1, skew: (h.skew * Math.PI) / 180,
-      size: r * 2,
+      w: r * 2, h: r * 2 * (h.sy / 100),
+      rot: (h.rot * Math.PI) / 180, size: r * 2,
+      sx: 1, sy: h.sy / 100,
+      skew: (h.skew * Math.PI) / 180, skewY: (h.skewY * Math.PI) / 180,
       fill: h.fill, stroke: h.stroke, sw: (h.sw / 1000) * S
     };
   });
@@ -386,17 +407,19 @@ export function layoutGlyphs(
       const jy = (rnd() - 0.5) * C.jitter * size * 0.55;
 
       const n = nudges.get(idx) ?? NO_NUDGE;
-      const sc = js * (n.sc / 100);
+      const sx = js * (n.sc / 100);
+      const sy = sx * (n.scy / 100);
       const bx = penX + w / 2 + (n.dx / 1000) * S;
       const byy = by + jy * js + (n.dy / 1000) * S;
 
       items.push({
         id: `g${idx}`, kind: "glyph", ch, bx, by: byy,
-        cx: bx, cy: byy - (asc * scale * sc) / 2,   // 글자 몸통의 대략적 중심
-        w: Math.max(w, size * 0.34) * sc,
-        h: (asc + dsc) * scale * sc,
-        rot: jr + (n.rot * Math.PI) / 180,
-        scale: sc, skew: (n.sk * Math.PI) / 180, size,
+        cx: bx, cy: byy - (asc * scale * sy) / 2,   // 글자 몸통의 대략적 중심
+        w: Math.max(w, size * 0.34) * sx,
+        h: (asc + dsc) * scale * sy,
+        rot: jr + (n.rot * Math.PI) / 180, size,
+        sx, sy,
+        skew: (n.sk * Math.PI) / 180, skewY: (n.sky * Math.PI) / 180,
         fill: C.cInk, stroke: null, sw: 0
       });
 
@@ -434,20 +457,58 @@ function paintStrokes(
   g.lineCap = "round";
   for (const { item: b, outline } of list) {
     g.save();
-    g.translate(b.bx, b.by);
-    g.rotate(b.rot);
-    if (b.skew) g.transform(1, 0, Math.tan(b.skew), 1, 0, 0); // 가로 전단 = 기울임
+    applyItemTransform(g, b);
     if (b.kind === "glyph") {
       g.font = `${F.weight} ${b.size}px ${F.css}, system-ui, sans-serif`;
-      g.scale(b.scale, b.scale);
+      g.scale(b.sx, b.sy);
       g.fillText(b.ch, 0, 0);
     } else {
-      shapePath(g, b.ch as ShapeKind, b.w / 2);
+      g.scale(b.sx, b.sy);
+      shapePath(g, b.ch as ShapeKind, b.size / 2);
       if (outline) { g.lineWidth = b.sw; g.stroke(); } else g.fill();
     }
     g.restore();
   }
   g.textAlign = "left";
+}
+
+/** 회전 + 두 축 기울임. 크기 배율은 글자와 도형이 달라서 호출한 쪽에서 건다. */
+function applyItemTransform(g: CanvasRenderingContext2D, b: Item) {
+  g.translate(b.bx, b.by);
+  g.rotate(b.rot);
+  if (b.skew || b.skewY) {
+    // (x, y) → (x + tan(skewX)·y, tan(skewY)·x + y)
+    g.transform(1, Math.tan(b.skewY), Math.tan(b.skew), 1, 0, 0);
+  }
+}
+
+/* ---------- 조작 핸들 ---------- */
+export type HandleId = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
+
+/** 각 핸들의 로컬 좌표(상자 반치수 기준) */
+const HANDLE_DIR: Record<HandleId, [number, number]> = {
+  nw: [-1, -1], n: [0, -1], ne: [1, -1], e: [1, 0],
+  se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0]
+};
+
+/** 항목의 회전·기울임을 먹인 뒤 핸들이 화면에서 실제로 놓이는 자리 */
+export function handlePoints(b: Item): { id: HandleId; x: number; y: number }[] {
+  const hw = b.w / 2, hh = b.h / 2;
+  const tx = Math.tan(b.skew), ty = Math.tan(b.skewY);
+  const cos = Math.cos(b.rot), sin = Math.sin(b.rot);
+  /* 상자는 중심(cx, cy) 기준이고 그리기 기준점(bx, by)과 다르므로 중심에서 푼다 */
+  return (Object.keys(HANDLE_DIR) as HandleId[]).map((id) => {
+    const [dx, dy] = HANDLE_DIR[id];
+    const lx = dx * hw, ly = dy * hh;
+    const sxv = lx + tx * ly, syv = ty * lx + ly;   // 기울임
+    return { id, x: b.cx + sxv * cos - syv * sin, y: b.cy + sxv * sin + syv * cos };
+  });
+}
+
+/** 화면 이동량을 회전한 항목의 로컬 축(가로·세로)으로 되돌린다 — 크기 조절 계산용 */
+export function toLocalDelta(rot: number, dx: number, dy: number) {
+  const cos = Math.cos(-rot), sin = Math.sin(-rot);
+  return { x: dx * cos - dy * sin, y: dx * sin + dy * cos };
 }
 
 /** 캔버스 좌표에서 항목을 집는다. 잉크가 번져 서로 붙기 때문에
@@ -622,16 +683,35 @@ export function compose(
     const pg = ctx2d(pool("probe", 8, 8));
     const b = layoutGlyphs(pg, S, C, fonts).items.find((x) => x.id === active);
     if (b) {
+      const pts = handlePoints(b);
+      const line = Math.max(1.5, S / 620);
       g.save();
       g.strokeStyle = "#1B3ECC";
-      g.lineWidth = Math.max(1.5, S / 480);
-      g.setLineDash([S / 90, S / 90]);
-      g.globalAlpha = 0.9;
-      g.translate(b.cx, b.cy);
-      g.rotate(b.rot);
-      if (b.skew) g.transform(1, 0, Math.tan(b.skew), 1, 0, 0);
-      const pad = Math.max(b.w, b.h) * 0.08;
-      g.strokeRect(-b.w / 2 - pad, -b.h / 2 - pad, b.w + pad * 2, b.h + pad * 2);
+      g.lineWidth = line;
+      g.globalAlpha = 0.95;
+
+      /* 상자는 핸들 여덟 점을 이어 그린다 — 기울임까지 그대로 반영된다 */
+      const ring: HandleId[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+      g.beginPath();
+      ring.forEach((id, i) => {
+        const p = pts.find((q) => q.id === id)!;
+        if (i) g.lineTo(p.x, p.y); else g.moveTo(p.x, p.y);
+      });
+      g.closePath();
+      g.setLineDash([S / 110, S / 110]);
+      g.stroke();
+
+      /* 핸들: 모서리는 채운 사각, 변 가운데는 빈 사각 — 하는 일이 달라서 모양도 다르다 */
+      g.setLineDash([]);
+      const r = Math.max(3.5, S / 175);
+      for (const p of pts) {
+        const corner = p.id.length === 2;
+        g.beginPath();
+        g.rect(p.x - r, p.y - r, r * 2, r * 2);
+        g.fillStyle = corner ? "#1B3ECC" : (C.transparent ? "#ffffff" : C.cPaper);
+        g.fill();
+        g.stroke();
+      }
       g.restore();
     }
   }
