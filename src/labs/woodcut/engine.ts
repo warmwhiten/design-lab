@@ -483,26 +483,36 @@ function applyItemTransform(g: CanvasRenderingContext2D, b: Item) {
 }
 
 /* ---------- 조작 핸들 ---------- */
-export type HandleId = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
+/** 회전 손잡이가 윗변에서 떨어진 거리 (캔버스 크기 대비) */
+export const ROT_STALK = 0.055;
+
+export type BoxHandleId = "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
+/** rot 은 윗변에서 대가 뻗어 나온 끝의 손잡이 — 빙 돌려 각도를 준다 */
+export type HandleId = BoxHandleId | "rot";
 
 /** 각 핸들의 로컬 좌표(상자 반치수 기준) */
-const HANDLE_DIR: Record<HandleId, [number, number]> = {
+const HANDLE_DIR: Record<BoxHandleId, [number, number]> = {
   nw: [-1, -1], n: [0, -1], ne: [1, -1], e: [1, 0],
   se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0]
 };
 
-/** 항목의 회전·기울임을 먹인 뒤 핸들이 화면에서 실제로 놓이는 자리 */
-export function handlePoints(b: Item): { id: HandleId; x: number; y: number }[] {
+/** 항목의 회전·기울임을 먹인 뒤 핸들이 화면에서 실제로 놓이는 자리.
+ *  stalk 가 0보다 크면 회전 손잡이를 그만큼 윗변 바깥에 얹어 함께 돌려준다. */
+export function handlePoints(b: Item, stalk = 0): { id: HandleId; x: number; y: number }[] {
   const hw = b.w / 2, hh = b.h / 2;
   const tx = Math.tan(b.skew), ty = Math.tan(b.skewY);
   const cos = Math.cos(b.rot), sin = Math.sin(b.rot);
   /* 상자는 중심(cx, cy) 기준이고 그리기 기준점(bx, by)과 다르므로 중심에서 푼다 */
-  return (Object.keys(HANDLE_DIR) as HandleId[]).map((id) => {
-    const [dx, dy] = HANDLE_DIR[id];
-    const lx = dx * hw, ly = dy * hh;
+  const place = (lx: number, ly: number) => {
     const sxv = lx + tx * ly, syv = ty * lx + ly;   // 기울임
-    return { id, x: b.cx + sxv * cos - syv * sin, y: b.cy + sxv * sin + syv * cos };
+    return { x: b.cx + sxv * cos - syv * sin, y: b.cy + sxv * sin + syv * cos };
+  };
+  const out = (Object.keys(HANDLE_DIR) as BoxHandleId[]).map((id) => {
+    const [dx, dy] = HANDLE_DIR[id];
+    return { id: id as HandleId, ...place(dx * hw, dy * hh) };
   });
+  if (stalk > 0) out.push({ id: "rot" as HandleId, ...place(0, -hh - stalk) });
+  return out;
 }
 
 /** 화면 이동량을 회전한 항목의 로컬 축(가로·세로)으로 되돌린다 — 크기 조절 계산용 */
@@ -683,12 +693,20 @@ export function compose(
     const pg = ctx2d(pool("probe", 8, 8));
     const b = layoutGlyphs(pg, S, C, fonts).items.find((x) => x.id === active);
     if (b) {
-      const pts = handlePoints(b);
+      const pts = handlePoints(b, S * ROT_STALK);
       const line = Math.max(1.5, S / 620);
       g.save();
       g.strokeStyle = "#1B3ECC";
       g.lineWidth = line;
       g.globalAlpha = 0.95;
+
+      /* 회전 손잡이: 윗변 가운데에서 대를 뽑고 끝에 동그란 점 */
+      const nP = pts.find((q) => q.id === "n")!;
+      const rP = pts.find((q) => q.id === "rot")!;
+      g.beginPath();
+      g.moveTo(nP.x, nP.y);
+      g.lineTo(rP.x, rP.y);
+      g.stroke();
 
       /* 상자는 핸들 여덟 점을 이어 그린다 — 기울임까지 그대로 반영된다 */
       const ring: HandleId[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
@@ -704,11 +722,17 @@ export function compose(
       /* 핸들: 모서리는 채운 사각, 변 가운데는 빈 사각 — 하는 일이 달라서 모양도 다르다 */
       g.setLineDash([]);
       const r = Math.max(3.5, S / 175);
+      const hollow = C.transparent ? "#ffffff" : C.cPaper;
       for (const p of pts) {
-        const corner = p.id.length === 2;
         g.beginPath();
-        g.rect(p.x - r, p.y - r, r * 2, r * 2);
-        g.fillStyle = corner ? "#1B3ECC" : (C.transparent ? "#ffffff" : C.cPaper);
+        if (p.id === "rot") {
+          g.arc(p.x, p.y, r * 1.25, 0, Math.PI * 2);   // 회전은 둥근 손잡이
+          g.fillStyle = hollow;
+        } else {
+          g.rect(p.x - r, p.y - r, r * 2, r * 2);
+          /* 모서리는 채우고 변 가운데는 비운다 — 하는 일이 달라서 모양도 다르다 */
+          g.fillStyle = p.id.length === 2 ? "#1B3ECC" : hollow;
+        }
         g.fill();
         g.stroke();
       }

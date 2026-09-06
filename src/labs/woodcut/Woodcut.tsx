@@ -6,21 +6,25 @@ import { loadFont, registerUserFont, type FontDef } from "@/lib/font";
 import {
   compose, FONTS as BASE_FONTS, handlePoints, layoutGlyphs, makeCanvas, NO_NUDGE,
   parseNudges, parseShapes, pickItem, serializeNudges, serializeShapes, SHAPES, TOOLS,
-  toLocalDelta, type HandleId, type Nudge, type Shape, type WoodcutState
+  toLocalDelta, ROT_STALK,
+  type BoxHandleId, type HandleId, type Nudge, type Shape, type WoodcutState
 } from "./engine";
 import { toSVG } from "./svg";
 import { DEFAULTS, DRAFT, PRESETS, PREVIEW } from "./config";
 
 /* 핸들의 로컬 방향과 커서 — 엔진의 HANDLE_DIR 과 짝을 이룬다 */
-const HANDLE_DIR_UI: Record<HandleId, [number, number]> = {
+const HANDLE_DIR_UI: Record<BoxHandleId, [number, number]> = {
   nw: [-1, -1], n: [0, -1], ne: [1, -1], e: [1, 0],
   se: [1, 1], s: [0, 1], sw: [-1, 1], w: [-1, 0]
 };
 const CURSOR: Record<HandleId, string> = {
   nw: "nwse-resize", se: "nwse-resize", ne: "nesw-resize", sw: "nesw-resize",
-  n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize"
+  n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize",
+  rot: "grab"
 };
 const clampDeg = (v: number) => Math.max(-70, Math.min(70, v));
+/** 회전은 순환값이라 -180°~180° 로 접어 둔다 (슬라이더 범위와 맞춘다) */
+const wrapDeg = (v: number) => ((v + 180) % 360 + 360) % 360 - 180;
 
 const f2 = (v: number) => v.toFixed(2);
 const f3 = (v: number) => v.toFixed(3);
@@ -48,6 +52,8 @@ export default function Woodcut() {
     start: Sel;                    // 잡은 순간의 값
     w0: number; h0: number;        // 잡은 순간의 상자 크기
     rot0: number;                  // 회전(라디안)
+    cx0: number; cy0: number;      // 잡은 순간의 중심 — 회전은 이 점을 축으로 돈다
+    a0: number;                    // 중심에서 잡은 지점을 본 각도
   };
   const dragRef = useRef<Drag | null>(null);
   const stateRef = useRef(state);
@@ -164,7 +170,7 @@ export default function Woodcut() {
       if (!it) return null;
       const r = handleRadius();
       let best: { id: HandleId; d: number } | null = null;
-      for (const q of handlePoints(it)) {
+      for (const q of handlePoints(it, 1000 * ROT_STALK)) {
         const d = Math.hypot(q.x - p.x, q.y - p.y);
         if (d <= r && (!best || d < best.d)) best = { id: q.id, d };
       }
@@ -172,10 +178,14 @@ export default function Woodcut() {
     };
 
     const begin = (id: string, mode: Drag["mode"], p: { x: number; y: number },
-      it: { w: number; h: number; rot: number }) => {
+      it: { w: number; h: number; rot: number; cx: number; cy: number }) => {
       const s = readSel(stateRef.current, id);
       if (!s) return false;
-      dragRef.current = { id, mode, x: p.x, y: p.y, start: s, w0: it.w, h0: it.h, rot0: it.rot };
+      dragRef.current = {
+        id, mode, x: p.x, y: p.y, start: s,
+        w0: it.w, h0: it.h, rot0: it.rot, cx0: it.cx, cy0: it.cy,
+        a0: Math.atan2(p.y - it.cy, p.x - it.cx)
+      };
       return true;
     };
 
@@ -227,6 +237,18 @@ export default function Woodcut() {
         } else {
           writeSel(d.id, { x: d.start.x + gx, y: d.start.y + gy }, true);
         }
+        cv.style.cursor = "grabbing";
+        return;
+      }
+
+      /* 회전 손잡이: 중심에서 본 각도의 변화를 그대로 각도에 더한다.
+         한 프레임에 반 바퀴 넘게 튀는 일은 없으므로 차이를 (-180°,180°] 로
+         감아 경계를 넘어가도 값이 뒤집히지 않게 한다. */
+      if (d.mode === "rot") {
+        const a = Math.atan2(p.y - d.cy0, p.x - d.cx0);
+        let dd = ((a - d.a0) * 180) / Math.PI;
+        dd = ((dd + 180) % 360 + 360) % 360 - 180;
+        writeSel(d.id, { rot: wrapDeg(d.start.rot + dd) }, true);
         cv.style.cursor = "grabbing";
         return;
       }
@@ -345,7 +367,7 @@ export default function Woodcut() {
     {
       label: "글자",
       controls: [
-        { t: "textarea", k: "text", rows: 2, hint: "줄바꿈으로 여러 줄. 캔버스에서 글자를 끌어 옮기고, Alt(또는 Shift) 를 누른 채 끌면 돌아갑니다." },
+        { t: "textarea", k: "text", rows: 2, hint: "줄바꿈으로 여러 줄. 캔버스에서 글자·도형을 집으면 조작 핸들이 붙습니다 — 모서리는 비율 유지, 변 가운데는 한 축, 윗변에서 뻗은 둥근 손잡이는 회전." },
         { t: "select", k: "font", label: "폰트", options: fonts.map((f) => ({ value: f.id, label: f.label })) },
         {
           t: "file", label: "내 폰트 쓰기 (.ttf / .otf / .woff2)", accept: ".ttf,.otf,.woff,.woff2,font/*",
@@ -377,7 +399,7 @@ export default function Woodcut() {
           set: (v) => setActive(v || null)
         },
         {
-          t: "vtoggle", label: "기울이기 도구 (변 핸들이 기울임으로 바뀝니다)",
+          t: "vtoggle", label: "기울임 도구 — 변 핸들이 기울임으로 바뀝니다 (회전은 둥근 손잡이)",
           get: () => skewMode,
           set: (v) => setSkewMode(v)
         },
